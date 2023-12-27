@@ -1,0 +1,45 @@
+
+#
+# Build Workflow
+#
+
+name: Build-Ubuntu
+
+run-name: ${{ github.actor }} started a ubuntu build.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - src/**
+      - third_party/**
+      - CMakeLists.txt
+      - .github/workflows/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - src/**
+      - third_party/**
+      - CMakeLists.txt
+      - .github/workflows/**
+
+jobs:
+  Ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create Build System
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Project
+        run: cmake --build build --config Release
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-ubuntu
+          path: build/builds/release/
