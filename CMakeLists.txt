@@ -11,14 +11,7 @@ set( APP_NAME texpack )
 
 add_executable( app src/main.cpp )
 
-option( BUILD_STATIC "" ON )
-option( BUILD_CRT_STATIC "" ON )
-
-if ( BUILD_CRT_STATIC )
-	target_compile_options( app PRIVATE $<$<CONFIG:Release>:-MD>$<$<CONFIG:Debug>:-MDd> )
-else()
-	target_compile_options( app PRIVATE $<$<CONFIG:Release>:-MT>$<$<CONFIG:Debug>:-MTd> )
-endif()
+option( BUILD_CRT_STATIC "CRT static link." ON )
 
 target_compile_definitions( app PRIVATE C_PLUS_PLUS )
 target_compile_definitions( app PRIVATE "$<$<CONFIG:Debug>:DEBUG>$<$<CONFIG:Release>:NDEBUG>" )
@@ -36,6 +29,12 @@ if ( MSVC )
 	target_compile_options( app PRIVATE -WX -W4 -wd4100 -wd4201 -wd4324 -wd4189 -Zc:preprocessor -Zc:strictStrings -GR- -EHsc )
 	target_compile_options( app PRIVATE $<$<CONFIG:Debug>:-Z7 -FC> )
 	target_compile_options( app PRIVATE $<$<CONFIG:Release>:-O2 -Ot -GF> )
+
+	if ( BUILD_CRT_STATIC )
+		target_compile_options( app PRIVATE $<$<CONFIG:Release>:-MT>$<$<CONFIG:Debug>:-MTd> )
+	else()
+		target_compile_options( app PRIVATE $<$<CONFIG:Release>:-MD>$<$<CONFIG:Debug>:-MDd> )
+	endif()
 endif()
 
 if ( CMAKE_COMPILER_IS_GNUCC )
