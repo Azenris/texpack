@@ -30,6 +30,19 @@ namespace fs = std::filesystem;
 #define PATH_SEP "/"
 #endif
 
+enum ToIntResult
+{
+	Success,
+	Failed,
+	Overflow,
+	Underflow,
+};
+
+ToIntResult to_int( i32 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
+ToIntResult to_int( u32 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
+ToIntResult to_int( i64 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
+ToIntResult to_int( u64 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
+
 enum RETURN_CODE
 {
 	RETURN_CODE_SUCCESS,
@@ -118,7 +131,10 @@ RETURN_CODE image_files( const char *path, std::unordered_map<std::string, u64> 
 			}
 
 			if ( !image->img )
+			{
+				std::cerr << "Failed to open image: " << filepath << std::endl;
 				return RETURN_CODE_FAILED_TO_OPEN_IMAGE;
+			}
 		}
 	}
 
@@ -127,6 +143,8 @@ RETURN_CODE image_files( const char *path, std::unordered_map<std::string, u64> 
 
 RETURN_CODE process_texturegroup( const char *path, Data *data )
 {
+	std::cout << "Processing: " << path << std::endl;
+
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
 
 	std::unordered_map<std::string, u64> map;
@@ -153,6 +171,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 	if ( stbrp_pack_rects( &context, rects.data(), (i32)rects.size() ) == 0 )
 	{
 		// TODO : in future could possible make another texture for the overflowed ones
+		std::cerr << "Failed to pack all images. (" << path << ")" << std::endl;
 		return RETURN_CODE_FAILED_TO_PACK_ALL;
 	}
 
@@ -178,9 +197,9 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		for ( u64 i = 0; i < totalBytes; i += 4 )
 		{
 			*img++ = 128;
-			*img++ = 0;
+			*img++ = 128;
 			*img++ = 255;
-			*img++ = 0;
+			*img++ = 255;
 		}
 	}
 
@@ -199,6 +218,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 	std::ofstream dataFile( outputName + ".dat", std::ios::binary );
 	if ( !dataFile.good() )
 	{
+		std::cerr << "Failed to create data file: " << outputName + ".dat" << std::endl;
 		return RETURN_CODE_FAILED_TO_CREATE_DATA_FILE;
 	}
 
@@ -224,18 +244,19 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		texpackSprite.emplace_back();
 		TexpackSpriteNamed *spr = &texpackSprite.back();
 
+		spr->sprite.frameCount = 1;
+
 		size_t found = diffuse.filename.rfind( "_" );
 		if ( found != std::string::npos )
 		{
-			spr->sprite.frameCount = std::stoi( &diffuse.filename[ found + 1 ] );
-			if ( spr->sprite.frameCount == 0 )
-				spr->sprite.frameCount = 1;
-			diffuse.filename.erase( found );
+			if ( to_int( &spr->sprite.frameCount, &diffuse.filename[ found + 1 ], nullptr, 10 ) == ToIntResult::Success )
+			{
+				diffuse.filename.erase( found );
+			}
 		}
-		else
-		{
+
+		if ( spr->sprite.frameCount == 0 )
 			spr->sprite.frameCount = 1;
-		}
 
 		if ( auto iter = map.find( diffuse.filename + "_n" ); iter != map.end() )
 		{
@@ -274,7 +295,10 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		if ( normal.img )
 		{
 			if ( normal.width != diffuse.width || normal.height != diffuse.height )
+			{
+				std::cerr << "Normal texture should be same size as diffuse texture." << std::endl;
 				return RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
+			}
 
 			for ( i32 y = 0; y < yCount; ++y )
 			{
@@ -283,10 +307,13 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 					i32 from = ( ( offX + x ) + ( offY + y ) * data->textureWidth ) * data->outputChannels;
 					i32 to = ( x + y * xCount ) * diffuse.channels;
 
-					normalImage[ from + 0 ] = normal.img[ to + 0 ];
-					normalImage[ from + 1 ] = normal.img[ to + 1 ];
-					normalImage[ from + 2 ] = normal.img[ to + 2 ];
-					normalImage[ from + 3 ] = normal.img[ to + 3 ];
+					if ( normal.img[ to + 3 ] != 0 )
+					{
+						normalImage[ from + 0 ] = normal.img[ to + 0 ];
+						normalImage[ from + 1 ] = normal.img[ to + 1 ];
+						normalImage[ from + 2 ] = normal.img[ to + 2 ];
+						normalImage[ from + 3 ] = normal.img[ to + 3 ];
+					}
 
 					isTranslucent = isTranslucent || ( normal.img[ to + 3 ] != 0 && normal.img[ to + 3 ] != 255 );
 				}
@@ -296,7 +323,10 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		if ( emissive.img )
 		{
 			if ( emissive.width != diffuse.width || emissive.height != diffuse.height )
+			{
+				std::cerr << "Emissive texture should be same size as diffuse texture." << std::endl;
 				return RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
+			}
 
 			for ( i32 y = 0; y < yCount; ++y )
 			{
@@ -361,6 +391,7 @@ int main( int argc, char *argv[] )
 
 	if ( argc < 2 )
 	{
+		std::cerr << "Invalid arguments" << std::endl;
 		return usage( RETURN_CODE_INVALID_ARGUMENTS );
 	}
 
@@ -408,7 +439,10 @@ int main( int argc, char *argv[] )
 	}
 
 	if ( data.textureWidth == 0 || data.textureHeight == 0 )
+	{
+		std::cerr << "Width and height should be > 0" << std::endl;
 		return usage( RETURN_CODE_INVALID_ARGUMENTS );
+	}
 
 	const char *inputPath = argv[ 1 ];
 
@@ -447,6 +481,68 @@ int main( int argc, char *argv[] )
 	std::cout << "Time: " << milliseconds.count() << "ms" << std::endl;
 
 	return ret != RETURN_CODE_SUCCESS ? usage( ret ) : ret;
+}
+
+ToIntResult to_int( i32 *value, char const *str, char **endOut, i32 base )
+{
+	i64 v;
+	ToIntResult result = to_int( &v, str, endOut, base );
+	if ( result != ToIntResult::Success )
+		return result;
+	if ( v > INT32_MAX )
+		return ToIntResult::Overflow;
+	if ( v < INT32_MIN )
+		return ToIntResult::Underflow;
+	*value = static_cast<i32>( v );
+	return ToIntResult::Success;
+}
+
+ToIntResult to_int( u32 *value, char const *str, char **endOut, i32 base )
+{
+	u64 v;
+	ToIntResult result = to_int( &v, str, endOut, base );
+	if ( result != ToIntResult::Success )
+		return result;
+	if ( v > UINT32_MAX )
+		return ToIntResult::Overflow;
+	if ( v < 0 )
+		return ToIntResult::Underflow;
+	*value = static_cast<u32>( v );
+	return ToIntResult::Success;
+}
+
+ToIntResult to_int( i64 *value, char const *str, char **endOut, i32 base )
+{
+	char *end;
+	errno = 0;
+	i64 l = strtol( str, &end, base );
+	if ( endOut )
+		*endOut = end;
+	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT_MAX )
+		return ToIntResult::Overflow;
+	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT_MIN )
+		return ToIntResult::Underflow;
+	if ( *str == '\0' )
+		return ToIntResult::Failed;
+	*value = l;
+	return ToIntResult::Success;
+}
+
+ToIntResult to_int( u64 *value, char const *str, char **endOut, i32 base )
+{
+	char *end;
+	errno = 0;
+	u64 l = strtoul( str, &end, base );
+	if ( endOut )
+		*endOut = end;
+	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT_MAX )
+		return ToIntResult::Overflow;
+	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT_MIN )
+		return ToIntResult::Underflow;
+	if ( *str == '\0' )
+		return ToIntResult::Failed;
+	*value = l;
+	return ToIntResult::Success;
 }
 
 // ----------------------------------------
