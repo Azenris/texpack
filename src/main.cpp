@@ -9,6 +9,7 @@
 #include <fstream>
 #include <chrono>
 #include <unordered_map>
+#include <climits>
 
 // Third Party Includes
 #pragma warning( push )
