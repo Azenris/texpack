@@ -54,31 +54,35 @@ struct ivec4
 	i32 w;
 };
 
-constexpr const u64 MAX_SPRITE_NAME		= 64;
-constexpr const u64 MAX_TEXTURE_NAME	= 64;
-
 struct TexpackTexture
 {
-	char texture[ MAX_TEXTURE_NAME ];
 	ivec2 size;
 	u32 numSprites;
 };
 
 struct TexpackSprite
 {
-	char name[ MAX_SPRITE_NAME ];
 	vec4 uvs;
 	ivec2 size;
+	i32 frameCount;
 	bool isTranslucent;
 };
 
 #pragma pack(pop)
+
+struct TexpackSpriteNamed
+{
+	std::string name;
+	TexpackSprite sprite;
+};
 
 struct Image
 {
 	std::string filename;
 	stbi_uc *img;
 	i32 channels;
+	i32 width;
+	i32 height;
 };
 
 struct Data

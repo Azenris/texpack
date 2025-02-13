@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fstream>
 #include <chrono>
+#include <unordered_map>
 
 // Third Party Includes
 #pragma warning( push )
@@ -37,8 +38,8 @@ enum RETURN_CODE
 	RETURN_CODE_FAILED_TO_OPEN_DIRECTORY,
 	RETURN_CODE_FAILED_TO_OPEN_IMAGE,
 	RETURN_CODE_FAILED_TO_CREATE_DATA_FILE,
-	RETURN_CODE_FAILED_TEXTURE_NAME_TOO_BIG,
-	RETURN_CODE_FAILED_SPRITE_NAME_TOO_BIG,
+	RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
+	RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
 };
 
 RETURN_CODE usage( RETURN_CODE code )
@@ -53,7 +54,14 @@ RETURN_CODE usage( RETURN_CODE code )
 	return code;
 }
 
-RETURN_CODE image_files( const char *path, std::vector<Image> &images, std::vector<stbrp_rect> &rects, Data *data )
+struct Group
+{
+	std::vector<Image> diffuse;
+	std::vector<Image> normal;
+	std::vector<Image> emissive;
+};
+
+RETURN_CODE image_files( const char *path, std::unordered_map<std::string, u64> &map, Group &group, std::vector<stbrp_rect> &rects, Data *data )
 {
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
 
@@ -65,24 +73,49 @@ RETURN_CODE image_files( const char *path, std::vector<Image> &images, std::vect
 	{
 		entrypath = entry.path();
 		filepath = entrypath.string();
-		filename = entrypath.filename().string();
+		filename = entrypath.stem().string();
 
 		if ( !entry.is_directory() )
 		{
-			rects.emplace_back();
-			images.emplace_back();
-			stbrp_rect *rect = &rects.back();
-			Image *image = &images.back();
+			Image *image = nullptr;
 
-			if ( filename.size() > MAX_SPRITE_NAME )
-				return RETURN_CODE_FAILED_SPRITE_NAME_TOO_BIG;
+			if ( filename.length() > 1 && filename.back() == 'n' && filename[ filename.length() - 2 ] == '_' )
+			{
+				map[ filename ] = group.normal.size();
+				group.normal.emplace_back();
+				image = &group.normal.back();
+				image->filename = filename;
+				image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+				image->width += data->padding * 2;
+				image->height += data->padding * 2;
+			}
+			else if ( filename.length() > 1 && filename.back() == 'e' && filename[ filename.length() - 2 ] == '_' )
+			{
+				map[ filename ] = group.emissive.size();
+				group.emissive.emplace_back();
+				image = &group.emissive.back();
+				image->filename = filename;
+				image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+				image->width += data->padding * 2;
+				image->height += data->padding * 2;
+			}
+			else
+			{
+				map[ filename ] = group.diffuse.size();
 
-			image->filename = filename;
+				rects.emplace_back();
+				stbrp_rect *rect = &rects.back();
 
-			image->img = stbi_load( filepath.c_str(), &rect->w, &rect->h, &image->channels, 4 );
+				group.diffuse.emplace_back();
+				image = &group.diffuse.back();
+				image->filename = filename;
+				image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+				image->width += data->padding * 2;
+				image->height += data->padding * 2;
 
-			rect->w += data->padding * 2;
-			rect->h += data->padding * 2;
+				rect->w = image->width;
+				rect->h = image->height;
+			}
 
 			if ( !image->img )
 				return RETURN_CODE_FAILED_TO_OPEN_IMAGE;
@@ -96,13 +129,17 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 {
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
 
-	std::vector<Image> images;
+	std::unordered_map<std::string, u64> map;
+	Group group;
 	std::vector<stbrp_rect> rects;
 
-	images.reserve( 1024 );
-	rects.reserve( 1024 );
+	constexpr i32 reserveAmount = 1024;
+	group.diffuse.reserve( reserveAmount );
+	group.normal.reserve( reserveAmount );
+	group.emissive.reserve( reserveAmount );
+	rects.reserve( reserveAmount );
 
-	ret = image_files( path, images, rects, data );
+	ret = image_files( path, map, group, rects, data );
 	if ( ret != RETURN_CODE_SUCCESS )
 		return ret;
 
@@ -120,27 +157,42 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 	}
 
 	u64 totalBytes = data->textureWidth * data->textureHeight * data->outputChannels;
-	std::vector<u8> outputImage;
-	outputImage.resize( totalBytes );
 
+	std::vector<u8> diffuseImage;
 	{
-		u8 *img = outputImage.data();
+		diffuseImage.resize( totalBytes );
+		u8 *img = diffuseImage.data();
 		for ( u64 i = 0; i < totalBytes; i += 4 )
 		{
-			*img++ = 255;
+			*img++ = 255;		// magenta - although if alpha is respected it wont be seen
 			*img++ = 0;
 			*img++ = 255;
 			*img++ = 0;
 		}
 	}
 
+	std::vector<u8> normalImage;
+	{
+		normalImage.resize( totalBytes );
+		u8 *img = normalImage.data();
+		for ( u64 i = 0; i < totalBytes; i += 4 )
+		{
+			*img++ = 128;
+			*img++ = 0;
+			*img++ = 255;
+			*img++ = 0;
+		}
+	}
+
+	std::vector<u8> emissiveImage;
+	{
+		emissiveImage.resize( totalBytes );
+		u8 *img = emissiveImage.data();
+		memset( img, 0, totalBytes );
+	}
+
 	std::string outputName = data->outputName;
 	std::string textureName = fs::path( path ).filename().string();
-
-	if ( textureName.size() > MAX_TEXTURE_NAME )
-	{
-		return RETURN_CODE_FAILED_TEXTURE_NAME_TOO_BIG;
-	}
 
 	outputName += PATH_SEP + textureName;
 
@@ -150,21 +202,51 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		return RETURN_CODE_FAILED_TO_CREATE_DATA_FILE;
 	}
 
-	outputName += ".png";
+	std::string diffuseName = outputName + ".png";
+	std::string normalName = outputName + "_n.png";
+	std::string emissiveName = outputName + "_e.png";
 
 	TexpackTexture texpackTexture;
-	sprintf( texpackTexture.texture, "%s", textureName.c_str() );
 	texpackTexture.size = { data->textureWidth, data->textureHeight };
 	texpackTexture.numSprites = (u32)rects.size();
 
-	std::vector<TexpackSprite> texpackSprite;
+	std::vector<TexpackSpriteNamed> texpackSprite;
 
 	f32 tw = (f32)data->textureWidth;
 	f32 th = (f32)data->textureHeight;
 
 	for ( u64 i = 0, count = rects.size(); i < count; ++i )
 	{
-		Image image = images[ i ];
+		Image diffuse = group.diffuse[ i ];
+		Image normal = {};
+		Image emissive = {};
+
+		texpackSprite.emplace_back();
+		TexpackSpriteNamed *spr = &texpackSprite.back();
+
+		size_t found = diffuse.filename.rfind( "_" );
+		if ( found != std::string::npos )
+		{
+			spr->sprite.frameCount = std::stoi( &diffuse.filename[ found + 1 ] );
+			if ( spr->sprite.frameCount == 0 )
+				spr->sprite.frameCount = 1;
+			diffuse.filename.erase( found );
+		}
+		else
+		{
+			spr->sprite.frameCount = 1;
+		}
+
+		if ( auto iter = map.find( diffuse.filename + "_n" ); iter != map.end() )
+		{
+			normal = group.normal[ iter->second ];
+		}
+
+		if ( auto iter = map.find( diffuse.filename + "_e" ); iter != map.end() )
+		{
+			emissive = group.emissive[ iter->second ];
+		}
+
 		stbrp_rect rect = rects[ i ];
 
 		i32 offX = rect.x + data->padding;
@@ -178,34 +260,97 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 			for ( i32 x = 0; x < xCount; ++x )
 			{
 				i32 from = ( ( offX + x ) + ( offY + y ) * data->textureWidth ) * data->outputChannels;
-				i32 to = ( x + y * xCount ) * image.channels;
+				i32 to = ( x + y * xCount ) * diffuse.channels;
 
-				outputImage[ from + 0 ] = image.img[ to + 0 ];
-				outputImage[ from + 1 ] = image.img[ to + 1 ];
-				outputImage[ from + 2 ] = image.img[ to + 2 ];
-				outputImage[ from + 3 ] = image.img[ to + 3 ];
+				diffuseImage[ from + 0 ] = diffuse.img[ to + 0 ];
+				diffuseImage[ from + 1 ] = diffuse.img[ to + 1 ];
+				diffuseImage[ from + 2 ] = diffuse.img[ to + 2 ];
+				diffuseImage[ from + 3 ] = diffuse.img[ to + 3 ];
 
-				isTranslucent = isTranslucent || ( image.img[ to + 3 ] != 0 && image.img[ to + 3 ] != 255 ) ;
+				isTranslucent = isTranslucent || ( diffuse.img[ to + 3 ] != 0 && diffuse.img[ to + 3 ] != 255 );
 			}
 		}
 
-		texpackSprite.emplace_back();
-		TexpackSprite *spr = &texpackSprite.back();
-		sprintf( spr->name, "%s", image.filename.c_str() );
-		spr->uvs = { offX / tw, offY / th, ( offX + xCount ) / tw, ( offY + yCount ) / th };
-		spr->size = { xCount, yCount };
-		spr->isTranslucent = isTranslucent;
+		if ( normal.img )
+		{
+			if ( normal.width != diffuse.width || normal.height != diffuse.height )
+				return RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 
-		stbi_image_free( image.img );
-		image.img = nullptr;
+			for ( i32 y = 0; y < yCount; ++y )
+			{
+				for ( i32 x = 0; x < xCount; ++x )
+				{
+					i32 from = ( ( offX + x ) + ( offY + y ) * data->textureWidth ) * data->outputChannels;
+					i32 to = ( x + y * xCount ) * diffuse.channels;
+
+					normalImage[ from + 0 ] = normal.img[ to + 0 ];
+					normalImage[ from + 1 ] = normal.img[ to + 1 ];
+					normalImage[ from + 2 ] = normal.img[ to + 2 ];
+					normalImage[ from + 3 ] = normal.img[ to + 3 ];
+
+					isTranslucent = isTranslucent || ( normal.img[ to + 3 ] != 0 && normal.img[ to + 3 ] != 255 );
+				}
+			}
+		}
+
+		if ( emissive.img )
+		{
+			if ( emissive.width != diffuse.width || emissive.height != diffuse.height )
+				return RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
+
+			for ( i32 y = 0; y < yCount; ++y )
+			{
+				for ( i32 x = 0; x < xCount; ++x )
+				{
+					i32 from = ( ( offX + x ) + ( offY + y ) * data->textureWidth ) * data->outputChannels;
+					i32 to = ( x + y * xCount ) * emissive.channels;
+
+					emissiveImage[ from + 0 ] = emissive.img[ to + 0 ];
+					emissiveImage[ from + 1 ] = emissive.img[ to + 1 ];
+					emissiveImage[ from + 2 ] = emissive.img[ to + 2 ];
+					emissiveImage[ from + 3 ] = emissive.img[ to + 3 ];
+
+					isTranslucent = isTranslucent || ( emissive.img[ to + 3 ] != 0 && emissive.img[ to + 3 ] != 255 );
+				}
+			}
+		}
+
+		spr->name = diffuse.filename;
+		spr->sprite.uvs = { offX / tw, offY / th, ( offX + xCount ) / tw, ( offY + yCount ) / th };
+		spr->sprite.size = { xCount, yCount };
+		spr->sprite.isTranslucent = isTranslucent;
+
+		stbi_image_free( diffuse.img );
+		diffuse.img = nullptr;
+
+		if ( normal.img )
+		{
+			stbi_image_free( normal.img );
+			normal.img = nullptr;
+		}
+
+		if ( emissive.img )
+		{
+			stbi_image_free( emissive.img );
+			emissive.img = nullptr;
+		}
 	}
 
-	std::cout << "Saving texture: " << outputName << std::endl;
+	std::cout << "Saving texture: " << diffuseName << std::endl;
 
-	stbi_write_png( outputName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, outputImage.data(), data->textureWidth * data->outputChannels);
+	stbi_write_png( diffuseName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, diffuseImage.data(), data->textureWidth * data->outputChannels );
+	stbi_write_png( normalName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, normalImage.data(), data->textureWidth * data->outputChannels );
+	stbi_write_png( emissiveName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, emissiveImage.data(), data->textureWidth * data->outputChannels );
 
+	dataFile.write( textureName.c_str(), textureName.length() );
+	dataFile.write( ".png", 4 + 1 ); // +1 to write the null terminator
 	dataFile.write( (char*)&texpackTexture, sizeof( texpackTexture ) );
-	dataFile.write( (char*)&texpackSprite[ 0 ], texpackSprite.size() * sizeof( TexpackSprite ) );
+
+	for ( u64 i = 0, count = texpackSprite.size(); i < count; ++i )
+	{
+		dataFile.write( texpackSprite[ i ].name.c_str(), texpackSprite[ i ].name.length() + 1 ); // +1 to write the null terminator
+		dataFile.write( (char*)&texpackSprite[ i ].sprite, sizeof( TexpackSprite ) );
+	}
 
 	return ret;
 }
@@ -293,7 +438,7 @@ int main( int argc, char *argv[] )
 		}
 		else
 		{
-			std::cerr << "File ignored.Top layer expects just folder representing texturegroups but found a file : " << filename << std::endl;
+			std::cerr << "File ignored. Top layer expects just folder representing texturegroups but found a file : " << filename << std::endl;
 		}
 	}
 
