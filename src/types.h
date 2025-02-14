@@ -91,6 +91,7 @@ struct Data
 	i32 outputChannels = 4;
 	i32 textureWidth = 0;
 	i32 textureHeight = 0;
+	i32 margin = 0;
 	i32 padding = 0;
 };
 
