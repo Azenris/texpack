@@ -83,6 +83,8 @@ struct Image
 	i32 channels;
 	i32 width;
 	i32 height;
+	i32 margin;
+	i32 padding;
 };
 
 struct Data

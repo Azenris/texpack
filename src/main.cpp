@@ -118,74 +118,116 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 	fs::path entrypath;
 	std::string filepath;
 	std::string filename;
+	std::ifstream datafile;
+	std::string datafileField;
+	i32 datafileValue;
+
+	i32 frameCount = 1;
+	i32 margin = 1;
+	i32 padding = 1;
 
 	for ( const fs::directory_entry &entry : fs::recursive_directory_iterator( path ) )
 	{
+		if ( entry.is_directory() )
+			continue;
+
 		entrypath = entry.path();
+
+		if ( entrypath.extension() == ".txt" )
+			continue;
+
 		filepath = entrypath.string();
 		filename = entrypath.stem().string();
+		datafile.open( entrypath.replace_extension( "txt" ), std::ios::binary );
 
-		if ( !entry.is_directory() )
+		frameCount = -1;
+		margin = data.data->margin;
+		padding = data.data->padding;
+
+		if ( datafile.is_open() )
 		{
-			Image *image = nullptr;
-
-			if ( filename.length() > 1 && filename.back() == 'n' && filename[ filename.length() - 2 ] == '_' )
+			while ( !datafile.eof() && datafile.good() )
 			{
-				data.map[ filename ] = data.group.normal.size();
-				data.group.normal.emplace_back();
-				image = &data.group.normal.back();
-				image->filename = filename;
-				image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+				datafile >> datafileField;
+				datafile >> datafileValue;
+
+				if ( datafileField == "FC" )
+					frameCount = datafileValue;
+				else if ( datafileField == "MG" )
+					margin = datafileValue;
+				else if ( datafileField == "PD" )
+					padding = datafileValue;
 			}
-			else if ( filename.length() > 1 && filename.back() == 'e' && filename[ filename.length() - 2 ] == '_' )
+		}
+
+		datafile.close();
+
+		Image *image = nullptr;
+
+		if ( filename.length() > 1 && filename.back() == 'n' && filename[ filename.length() - 2 ] == '_' )
+		{
+			data.map[ filename ] = data.group.normal.size();
+			data.group.normal.emplace_back();
+			image = &data.group.normal.back();
+			image->filename = filename;
+			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+		}
+		else if ( filename.length() > 1 && filename.back() == 'e' && filename[ filename.length() - 2 ] == '_' )
+		{
+			data.map[ filename ] = data.group.emissive.size();
+			data.group.emissive.emplace_back();
+			image = &data.group.emissive.back();
+			image->filename = filename;
+			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+		}
+		else
+		{
+			data.map[ filename ] = data.group.diffuse.size();
+
+			data.rects.emplace_back();
+			stbrp_rect *rect = &data.rects.back();
+
+			data.group.diffuse.emplace_back();
+			image = &data.group.diffuse.back();
+			image->filename = filename;
+			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+
+			data.texpackSprite.emplace_back();
+			TexpackSpriteNamed *spr = &data.texpackSprite.back();
+
+			if ( frameCount == -1 )
 			{
-				data.map[ filename ] = data.group.emissive.size();
-				data.group.emissive.emplace_back();
-				image = &data.group.emissive.back();
-				image->filename = filename;
-				image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
-			}
-			else
-			{
-				data.map[ filename ] = data.group.diffuse.size();
-
-				data.rects.emplace_back();
-				stbrp_rect *rect = &data.rects.back();
-
-				data.group.diffuse.emplace_back();
-				image = &data.group.diffuse.back();
-				image->filename = filename;
-				image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
-
-				data.texpackSprite.emplace_back();
-				TexpackSpriteNamed *spr = &data.texpackSprite.back();
-
-				spr->sprite.frameCount = 1;
+				frameCount = 1;
 
 				size_t found = image->filename.rfind( "_" );
+
 				if ( found != std::string::npos )
 				{
-					if ( to_int( &spr->sprite.frameCount, &image->filename[ found + 1 ], nullptr, 10 ) == ToIntResult::Success )
+					if ( to_int( &frameCount, &image->filename[ found + 1 ], nullptr, 10 ) == ToIntResult::Success )
 					{
 						image->filename.erase( found );
 					}
 				}
 
-				if ( spr->sprite.frameCount == 0 )
-					spr->sprite.frameCount = 1;
-
-				image->width += data.data->margin * 2 + data.data->padding * 2 * spr->sprite.frameCount;
-				image->height += ( data.data->margin + data.data->padding ) * 2;
-
-				rect->w = image->width;
-				rect->h = image->height;
+				if ( frameCount == 0 )
+					frameCount = 1;
 			}
 
-			if ( !image->img )
-			{
-				std::cerr << "Failed to open image: " << filepath << std::endl;
-				return RETURN_CODE_FAILED_TO_OPEN_IMAGE;
-			}
+			spr->sprite.frameCount = frameCount;
+
+			image->margin = margin;
+			image->padding = padding;
+			image->width += margin * 2 + padding * 2 * frameCount;
+			image->height += ( margin + padding ) * 2;
+
+			rect->w = image->width;
+			rect->h = image->height;
+		}
+
+		if ( !image->img )
+		{
+			std::cerr << "Failed to open image: " << filepath << std::endl;
+			return RETURN_CODE_FAILED_TO_OPEN_IMAGE;
 		}
 	}
 
@@ -314,16 +356,19 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 
 		stbrp_rect rect = rects[ i ];
 
-		i32 offX = rect.x + data->margin + data->padding;
-		i32 offY = rect.y + data->margin + data->padding;
-		i32 inputTextureW = ( rect.w - ( data->margin * 2 + data->padding * 2 * spr->sprite.frameCount ) );
+		i32 margin = diffuse.margin;
+		i32 padding = diffuse.padding;
+
+		i32 offX = rect.x + margin + padding;
+		i32 offY = rect.y + margin + padding;
+		i32 inputTextureW = ( rect.w - ( margin * 2 + padding * 2 * spr->sprite.frameCount ) );
 		i32 frameW = inputTextureW / spr->sprite.frameCount;
-		i32 frameH = rect.h - ( data->margin + data->padding ) * 2;
+		i32 frameH = rect.h - ( margin + padding ) * 2;
 		bool isTranslucent = false;
 
 		for ( i32 frame = 0; frame < spr->sprite.frameCount; ++frame )
 		{
-			i32 frameOffX = offX + frame * ( frameW + data->padding * 2 );
+			i32 frameOffX = offX + frame * ( frameW + padding * 2 );
 			i32 frameOffY = offY;
 
 			isTranslucent = render_image( diffuseImage, frameOffX, frameOffY, frameW, frameH, diffuse.img, frame, inputTextureW, diffuse.channels, data ) || isTranslucent;
@@ -353,9 +398,10 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 
 		spr->name = diffuse.filename;
 
-		offX = rect.x + data->margin;
-		offY = rect.y + data->margin;
-		frameW = frameW+ data->padding * 2;
+		offX = rect.x + margin;
+		offY = rect.y + margin;
+		frameW = frameW + padding * 2;
+		frameH = frameH + padding * 2;
 
 		spr->sprite.uvs = { offX / tw, offY / th, ( offX + frameW ) / tw, ( offY + frameH ) / th };
 		spr->sprite.size = { frameW, frameH };
