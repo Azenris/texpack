@@ -25,12 +25,6 @@
 
 namespace fs = std::filesystem;
 
-#ifdef WIN32
-#define PATH_SEP "\\"
-#else
-#define PATH_SEP "/"
-#endif
-
 enum ToIntResult
 {
 	Success,
@@ -67,12 +61,13 @@ RETURN_CODE usage( RETURN_CODE code )
 				 "-w 4096             width of output textures \n"
 				 "-h 4096             height of output textures \n"
 				 "-margin 1           extra space around and not included in the sprite\n"
-				 "-pad 2              extra space around and included in the sprite" << std::endl;
+				 "-pad 2              extra space around and included in the sprite\n"
+				 "-verbose            verbose logging" << std::endl;
 
 	return code;
 }
 
-static bool render_image( std::vector<u8> &output, i32 offX, i32 offY, i32 frameW, i32 frameH, u8 *input, i32 frame, i32 inputW, i32 channels, Data *data )
+static bool render_image( std::vector<u8> &output, i32 offX, i32 offY, i32 frameW, i32 frameH, u8 *input, i32 imgSize, i32 frame, i32 inputW, i32 channels, Data *data )
 {
 	bool isTranslucent = false;
 
@@ -88,7 +83,7 @@ static bool render_image( std::vector<u8> &output, i32 offX, i32 offY, i32 frame
 			output[ to + 2 ] = input[ from + 2 ];
 			output[ to + 3 ] = input[ from + 3 ];
 
-			isTranslucent = isTranslucent || ( input[ to + 3 ] != 0 && input[ to + 3 ] != 255 );
+			isTranslucent = isTranslucent || ( output[ to + 3 ] != 0 && output[ to + 3 ] != 255 );
 		}
 	}
 
@@ -111,6 +106,8 @@ struct ImageFilesData
 	Data *data;
 };
 
+static bool verbose = false;
+
 RETURN_CODE image_files( const char *path, ImageFilesData &data )
 {
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
@@ -118,6 +115,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 	fs::path entrypath;
 	std::string filepath;
 	std::string filename;
+	std::string datafilename;
 	std::ifstream datafile;
 	std::string datafileField;
 	i32 datafileValue;
@@ -138,7 +136,11 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 
 		filepath = entrypath.string();
 		filename = entrypath.stem().string();
-		datafile.open( entrypath.replace_extension( "txt" ), std::ios::binary );
+		datafilename = entrypath.replace_extension( "txt" ).string();
+		datafile.open( datafilename, std::ios::binary );
+
+		if ( verbose )
+			std::cout << "Processing file: " << filepath << std::endl;
 
 		frameCount = -1;
 		margin = data.data->margin;
@@ -146,6 +148,9 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 
 		if ( datafile.is_open() )
 		{
+			if ( verbose )
+				std::cout << "Reading datafile: " << datafilename << std::endl;
+
 			while ( !datafile.eof() && datafile.good() )
 			{
 				datafile >> datafileField;
@@ -171,6 +176,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 			image = &data.group.normal.back();
 			image->filename = filename;
 			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+			image->imgSize = image->width * image->height * image->channels;
 		}
 		else if ( filename.length() > 1 && filename.back() == 'e' && filename[ filename.length() - 2 ] == '_' )
 		{
@@ -179,6 +185,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 			image = &data.group.emissive.back();
 			image->filename = filename;
 			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+			image->imgSize = image->width * image->height * image->channels;
 		}
 		else
 		{
@@ -191,6 +198,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 			image = &data.group.diffuse.back();
 			image->filename = filename;
 			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
+			image->imgSize = image->width * image->height * image->channels;
 
 			data.texpackSprite.emplace_back();
 			TexpackSpriteNamed *spr = &data.texpackSprite.back();
@@ -236,7 +244,8 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 
 RETURN_CODE process_texturegroup( const char *path, Data *data )
 {
-	std::cout << "Processing: " << path << std::endl;
+	if ( verbose )
+		std::cout << "Processing: " << path << std::endl;
 
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
 
@@ -278,6 +287,9 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		return RETURN_CODE_FAILED_TO_PACK_ALL;
 	}
 
+	if ( verbose )
+		std::cout << "Creating blank images." << path << std::endl;
+
 	u64 totalBytes = data->textureWidth * data->textureHeight * data->outputChannels;
 
 	std::vector<u8> diffuseImage;
@@ -316,7 +328,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 	std::string outputName = data->outputName;
 	std::string textureName = fs::path( path ).filename().string();
 
-	outputName += PATH_SEP + textureName;
+	outputName += "/" + textureName;
 
 	std::ofstream dataFile( outputName + ".dat", std::ios::binary );
 	if ( !dataFile.good() )
@@ -371,7 +383,10 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 			i32 frameOffX = offX + frame * ( frameW + padding * 2 );
 			i32 frameOffY = offY;
 
-			isTranslucent = render_image( diffuseImage, frameOffX, frameOffY, frameW, frameH, diffuse.img, frame, inputTextureW, diffuse.channels, data ) || isTranslucent;
+			if ( verbose )
+				std::cout << "Rendering diffuse image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
+
+			isTranslucent = render_image( diffuseImage, frameOffX, frameOffY, frameW, frameH, diffuse.img, diffuse.imgSize, frame, inputTextureW, diffuse.channels, data ) || isTranslucent;
 
 			if ( normal.img )
 			{
@@ -381,7 +396,10 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 					return RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
-				isTranslucent = render_image( normalImage, frameOffX, frameOffY, frameW, frameH, normal.img, frame, inputTextureW, normal.channels, data ) || isTranslucent;
+				if ( verbose )
+					std::cout << "Rendering normal image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
+
+				isTranslucent = render_image( normalImage, frameOffX, frameOffY, frameW, frameH, normal.img, normal.imgSize, frame, inputTextureW, normal.channels, data ) || isTranslucent;
 			}
 
 			if ( emissive.img )
@@ -392,7 +410,10 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 					return RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
-				isTranslucent = render_image( emissiveImage, frameOffX, frameOffY, frameW, frameH, emissive.img, frame, inputTextureW, emissive.channels, data ) || isTranslucent;
+				if ( verbose )
+					std::cout << "Rendering emissive image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
+
+				isTranslucent = render_image( emissiveImage, frameOffX, frameOffY, frameW, frameH, emissive.img, emissive.imgSize, frame, inputTextureW, emissive.channels, data ) || isTranslucent;
 			}
 		}
 
@@ -499,6 +520,11 @@ int main( int argc, char *argv[] )
 				return usage( RETURN_CODE_INVALID_ARGUMENTS );
 			data.padding = atoi( argv[ i + 1 ] );
 
+			i += 1;
+		}
+		else if ( strcmp( argv[ i ], "-verbose" ) == 0 )
+		{
+			verbose = true;
 			i += 1;
 		}
 	}

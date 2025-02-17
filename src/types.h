@@ -80,6 +80,7 @@ struct Image
 {
 	std::string filename;
 	stbi_uc *img;
+	i32 imgSize;
 	i32 channels;
 	i32 width;
 	i32 height;

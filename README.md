@@ -5,7 +5,7 @@
 ![Build Ubuntu](https://github.com/Azenris/texpack/actions/workflows/build-ubuntu.yml/badge.svg)
 
 ### Simple Texture Packer
-A simple texture packer currently using stb_rect_pack used in my current game project.
+A simple texture packer currently using stb_rect_pack.
 
 ### License
 For license see LICENSE.md
