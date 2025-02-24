@@ -1,5 +1,6 @@
 
 // System Includes
+#define __STDC_LIMIT_MACROS
 #include <stdint.h>
 #include <iostream>
 #include <string>
@@ -68,8 +69,8 @@ RETURN_CODE usage( RETURN_CODE code )
 	return code;
 }
 
-#define min( l, r )	( ( l ) < ( r ) ? ( l ) : ( r ) )
-#define max( l, r )	( ( l ) > ( r ) ? ( l ) : ( r ) )
+#define min_value( l, r )	( ( l ) < ( r ) ? ( l ) : ( r ) )
+#define max_value( l, r )	( ( l ) > ( r ) ? ( l ) : ( r ) )
 
 static ivec4 image_rect_area( Image *image, TexpackSpriteNamed *sprite, i32 imgWidth, Data *data )
 {
@@ -91,7 +92,7 @@ static ivec4 image_rect_area( Image *image, TexpackSpriteNamed *sprite, i32 imgW
 
 				if ( input[ from + 3 ] != 0 )
 				{
-					area.x = max( area.x, x );
+					area.x = max_value( area.x, x );
 					goto doneLeft;
 				}
 			}
@@ -110,7 +111,7 @@ doneLeft:
 
 				if ( input[ from + 3 ] != 0 )
 				{
-					area.y = max( area.y, y );
+					area.y = max_value( area.y, y );
 					goto doneTop;
 				}
 			}
@@ -129,7 +130,7 @@ doneTop:
 
 				if ( input[ from + 3 ] != 0 )
 				{
-					area.z = min( area.z, x );
+					area.z = min_value( area.z, x );
 					goto doneRight;
 				}
 			}
@@ -148,7 +149,7 @@ doneRight:
 
 				if ( input[ from + 3 ] != 0 )
 				{
-					area.w = min( area.w, y );
+					area.w = min_value( area.w, y );
 					goto doneBot;
 				}
 			}
@@ -470,7 +471,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 					case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO:
 						colData->area = image_rect_area( image, spr, imgWidth, data.data );
 						colData->position = { ( image->frameW + padding * 2 ) / 2, ( image->frameH + padding * 2 ) / 2 };
-						colData->radius = max( ( colData->area.z - colData->area.x ), ( colData->area.w - colData->area.y ) );
+						colData->radius = max_value( ( colData->area.z - colData->area.x ), ( colData->area.w - colData->area.y ) );
 						break;
 
 					case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS:
@@ -904,9 +905,9 @@ ToIntResult to_int( i64 *value, char const *str, char **endOut, i32 base )
 	i64 l = strtol( str, &end, base );
 	if ( endOut )
 		*endOut = end;
-	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT_MAX )
+	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT32_MAX )
 		return ToIntResult::Overflow;
-	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT_MIN )
+	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT32_MIN )
 		return ToIntResult::Underflow;
 	if ( *str == '\0' )
 		return ToIntResult::Failed;
@@ -921,9 +922,9 @@ ToIntResult to_int( u64 *value, char const *str, char **endOut, i32 base )
 	u64 l = strtoul( str, &end, base );
 	if ( endOut )
 		*endOut = end;
-	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT_MAX )
+	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT32_MAX )
 		return ToIntResult::Overflow;
-	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT_MIN )
+	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT32_MIN )
 		return ToIntResult::Underflow;
 	if ( *str == '\0' )
 		return ToIntResult::Failed;
