@@ -64,8 +64,10 @@ struct TexpackSprite
 {
 	vec4 uvs;
 	ivec2 size;
+	ivec2 origin;
 	i32 frameCount;
 	bool isTranslucent;
+	u8 colliderCount;
 };
 
 #pragma pack(pop)
@@ -75,6 +77,34 @@ struct TexpackSpriteNamed
 	std::string name;
 	TexpackSprite sprite;
 };
+
+enum COLLIDER_TYPE
+{
+	COLLIDER_TYPE_CIRCLE,
+	COLLIDER_TYPE_RECT,
+	COLLIDER_TYPE_COUNT
+};
+
+enum GEN_COLLISION_DATA_TYPE
+{
+	GEN_COLLISION_DATA_TYPE_RECT_AUTO,
+	GEN_COLLISION_DATA_TYPE_RECT_FULL,
+	GEN_COLLISION_DATA_TYPE_RECT_MANUAL,
+	GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO,
+	GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS,
+	GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL,
+};
+
+struct GenCollisionData
+{
+	bool enable;
+	GEN_COLLISION_DATA_TYPE type;
+	ivec4 area;
+	ivec2 position;
+	i32 radius;
+};
+
+constexpr i32 MAX_SPRITE_COLLIDERS = 16;
 
 struct Image
 {
@@ -86,6 +116,10 @@ struct Image
 	i32 height;
 	i32 margin;
 	i32 padding;
+	i32 frameW;
+	i32 frameH;
+	u32 colliderCount;
+	GenCollisionData genColData[ MAX_SPRITE_COLLIDERS ];
 };
 
 struct Data

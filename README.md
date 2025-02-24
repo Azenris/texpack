@@ -20,9 +20,22 @@ Example datafile. Case-Sensitive.
 FC 2
 MG 1
 PD 0
+OR 16 8
+COL RECT A
 ```
 ```
-FC = FrameCount
-MG = Margin
-PD = Padding
+FC <num>        = FrameCount
+MG <num>        = Margin
+PD <num>        = Padding
+OR <num> <num>  = Origin
+```
+```
+COL <type> <char> ...  = Collision
+  COL <type> can be either RECT or CIRCLE
+  COL <char> can be A to generate automatic values
+EG.
+COL RECT M 1 1 5 5     = a rect with 1, 1, 5, 5 values
+COL RECT A             = auto generate around the sprite
+COL CIRCLE M 1 1 5     = a circle at position 1, 1 with a radius of 5
+COL CIRCLE A           = auto generate a circle, position in centre, radius = max(w, h)
 ```

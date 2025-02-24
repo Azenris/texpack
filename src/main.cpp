@@ -62,9 +62,106 @@ RETURN_CODE usage( RETURN_CODE code )
 				 "-h 4096             height of output textures \n"
 				 "-margin 1           extra space around and not included in the sprite\n"
 				 "-pad 2              extra space around and included in the sprite\n"
+				 "-collision          generate collision box\n"
 				 "-verbose            verbose logging" << std::endl;
 
 	return code;
+}
+
+#define min( l, r )	( ( l ) < ( r ) ? ( l ) : ( r ) )
+#define max( l, r )	( ( l ) > ( r ) ? ( l ) : ( r ) )
+
+static ivec4 image_rect_area( Image *image, TexpackSpriteNamed *sprite, i32 imgWidth, Data *data )
+{
+	ivec4 area = { INT32_MIN, INT32_MIN, INT32_MAX, INT32_MAX };
+	i32 frameW = image->frameW;
+	i32 frameH = image->frameH;
+	i32 frameCount = sprite->sprite.frameCount;
+	i32 channels = image->channels;
+	u8 *input = image->img;
+
+	// Left Side
+	for ( i32 x = 0; x < frameW; ++x )
+	{
+		for ( i32 y = 0; y < frameH; ++y )
+		{
+			for ( i32 frame = 0; frame < frameCount; ++frame )
+			{
+				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
+
+				if ( input[ from + 3 ] != 0 )
+				{
+					area.x = max( area.x, x );
+					goto doneLeft;
+				}
+			}
+		}
+	}
+doneLeft:
+
+	// Top Side
+	for ( i32 y = 0; y < frameH; ++y )
+	{
+		for ( i32 x = 0; x < frameW; ++x )
+		{
+			for ( i32 frame = 0; frame < frameCount; ++frame )
+			{
+				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
+
+				if ( input[ from + 3 ] != 0 )
+				{
+					area.y = max( area.y, y );
+					goto doneTop;
+				}
+			}
+		}
+	}
+doneTop:
+
+	// Right Side
+	for ( i32 x = frameW - 1; x >= 0; --x )
+	{
+		for ( i32 y = 0; y < frameH; ++y )
+		{
+			for ( i32 frame = 0; frame < frameCount; ++frame )
+			{
+				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
+
+				if ( input[ from + 3 ] != 0 )
+				{
+					area.z = min( area.z, x );
+					goto doneRight;
+				}
+			}
+		}
+	}
+doneRight:
+
+	// Bottom Side
+	for ( i32 y = frameH - 1; y >= 0; --y )
+	{
+		for ( i32 x = 0; x < frameW; ++x )
+		{
+			for ( i32 frame = 0; frame < frameCount; ++frame )
+			{
+				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
+
+				if ( input[ from + 3 ] != 0 )
+				{
+					area.w = min( area.w, y );
+					goto doneBot;
+				}
+			}
+		}
+	}
+doneBot:
+
+	area.x += image->padding;
+	area.y += image->padding;
+	area.z += image->padding;
+	area.w += image->padding;
+
+	return area;
 }
 
 static bool render_image( std::vector<u8> &output, i32 offX, i32 offY, i32 frameW, i32 frameH, u8 *input, i32 imgSize, i32 frame, i32 inputW, i32 channels, Data *data )
@@ -107,6 +204,7 @@ struct ImageFilesData
 };
 
 static bool verbose = false;
+static GenCollisionData generateCollisionData = { .enable = false, .type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL };
 
 RETURN_CODE image_files( const char *path, ImageFilesData &data )
 {
@@ -119,10 +217,16 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 	std::ifstream datafile;
 	std::string datafileField;
 	i32 datafileValue;
-
-	i32 frameCount = 1;
-	i32 margin = 1;
-	i32 padding = 1;
+	i32 frameCount;
+	i32 margin;
+	i32 padding;
+	i32 originX;
+	i32 originY;
+	i32 imgWidth;
+	i32 imgHeight;
+	bool manualCol;
+	u32 collisionCount;
+	GenCollisionData genColData[ MAX_SPRITE_COLLIDERS ];
 
 	for ( const fs::directory_entry &entry : fs::recursive_directory_iterator( path ) )
 	{
@@ -145,6 +249,11 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 		frameCount = -1;
 		margin = data.data->margin;
 		padding = data.data->padding;
+		originX = INT32_MAX;
+		originY = INT32_MAX;
+		collisionCount = generateCollisionData.enable ? 1 : 0;
+		genColData[ 0 ] = generateCollisionData;
+		manualCol = false;
 
 		if ( datafile.is_open() )
 		{
@@ -154,14 +263,107 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 			while ( !datafile.eof() && datafile.good() )
 			{
 				datafile >> datafileField;
-				datafile >> datafileValue;
 
 				if ( datafileField == "FC" )
+				{
+					datafile >> datafileValue;
 					frameCount = datafileValue;
+				}
 				else if ( datafileField == "MG" )
+				{
+					datafile >> datafileValue;
 					margin = datafileValue;
+				}
 				else if ( datafileField == "PD" )
+				{
+					datafile >> datafileValue;
 					padding = datafileValue;
+				}
+				else if ( datafileField == "OR" )
+				{
+					datafile >> datafileValue;
+					originX = datafileValue;
+					datafile >> datafileValue;
+					originY = datafileValue;
+				}
+				else if ( datafileField == "COL" )
+				{
+					// first collision is overwritten if their was a global one
+					if ( !manualCol && generateCollisionData.enable && collisionCount == 1 )
+					{
+						manualCol = true;
+						collisionCount -= 1;
+					}
+					GenCollisionData *colData = &genColData[ collisionCount++ ];
+					colData->enable = true;
+					datafile >> datafileField;
+					if ( datafileField == "RECT" )
+					{
+						datafile >> datafileField;
+						if ( datafileField == "A" ) // Auto
+						{
+							colData->type = GEN_COLLISION_DATA_TYPE_RECT_AUTO;
+						}
+						if ( datafileField == "F" ) // Full
+						{
+							colData->type = GEN_COLLISION_DATA_TYPE_RECT_FULL;
+						}
+						else if ( datafileField == "M" ) // Manual
+						{
+							colData->type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL;
+							datafile >> datafileValue;
+							colData->area.x = datafileValue;
+							datafile >> datafileValue;
+							colData->area.y = datafileValue;
+							datafile >> datafileValue;
+							colData->area.z = datafileValue;
+							datafile >> datafileValue;
+							colData->area.w = datafileValue;
+						}
+						else
+						{
+							if ( verbose )
+								std::cout << "Unknown data file field COL RECT: " << datafileField << std::endl;
+						}
+					}
+					else if ( datafileField == "CIRCLE" )
+					{
+						datafile >> datafileField;
+						if ( datafileField == "A" ) // Auto
+						{
+							colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO;
+						}
+						else if ( datafileField == "AE" ) // Auto-Emcompass
+						{
+							colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS;
+						}
+						else if ( datafileField == "M" ) // Manual
+						{
+							colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL;
+							datafile >> datafileValue;
+							colData->position.x = datafileValue;
+							datafile >> datafileValue;
+							colData->position.y = datafileValue;
+							datafile >> datafileValue;
+							colData->radius = datafileValue;
+						}
+						else
+						{
+							if ( verbose )
+								std::cout << "Unknown data file field COL CIRCLE: " << datafileField << std::endl;
+						}
+					}
+					else
+					{
+						if ( verbose )
+							std::cout << "Unknown data file field for COL: " << datafileField << std::endl;
+					}
+				}
+				else
+				{
+					if ( verbose )
+						std::cout << "Unknown data file field: " << datafileField << std::endl;
+				}
 			}
 		}
 
@@ -221,15 +423,69 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 					frameCount = 1;
 			}
 
+			if ( originX == INT32_MAX )
+				originX = ( image->width / frameCount ) / 2;
+
+			if ( originY == INT32_MAX )
+				originY = image->height / 2;
+
 			spr->sprite.frameCount = frameCount;
+			spr->sprite.origin = { originX + padding, originY + padding };
+			spr->sprite.colliderCount = (u8)collisionCount;
+
+			imgWidth = image->width;
+			imgHeight = image->height;
 
 			image->margin = margin;
 			image->padding = padding;
 			image->width += margin * 2 + padding * 2 * frameCount;
 			image->height += ( margin + padding ) * 2;
+			image->frameW = imgWidth / spr->sprite.frameCount;
+			image->frameH = imgHeight;
+			image->colliderCount = collisionCount;
 
 			rect->w = image->width;
 			rect->h = image->height;
+
+			// Collision
+			for ( u32 colIdx = 0; colIdx < collisionCount; ++colIdx )
+			{
+				GenCollisionData *colData = &genColData[ colIdx ];
+
+				if ( colData->enable )
+				{
+					switch ( colData->type )
+					{
+					case GEN_COLLISION_DATA_TYPE_RECT_AUTO:
+						colData->area = image_rect_area( image, spr, imgWidth, data.data );
+						break;
+
+					case GEN_COLLISION_DATA_TYPE_RECT_FULL:
+						colData->area = { padding, padding, image->frameW, image->frameH };
+						break;
+
+					case GEN_COLLISION_DATA_TYPE_RECT_MANUAL:
+						break;
+
+					case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO:
+						colData->area = image_rect_area( image, spr, imgWidth, data.data );
+						colData->position = { ( image->frameW + padding * 2 ) / 2, ( image->frameH + padding * 2 ) / 2 };
+						colData->radius = max( ( colData->area.z - colData->area.x ), ( colData->area.w - colData->area.y ) );
+						break;
+
+					case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS:
+						colData->area = image_rect_area( image, spr, imgWidth, data.data );
+						colData->position = { ( image->frameW + padding * 2 ) / 2, ( image->frameH + padding * 2 ) / 2 };
+						// TODO : radius equal to diagonal from centre
+						break;
+
+					case GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL:
+						break;
+					}
+
+					image->genColData[ colIdx ] = genColData[ colIdx ];
+				}
+			}
 		}
 
 		if ( !image->img )
@@ -458,6 +714,40 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 	{
 		dataFile.write( texpackSprite[ i ].name.c_str(), texpackSprite[ i ].name.length() + 1 ); // +1 to write the null terminator
 		dataFile.write( (char*)&texpackSprite[ i ].sprite, sizeof( TexpackSprite ) );
+
+		if ( texpackSprite[ i ].sprite.colliderCount > 0 )
+		{
+			const Image *diffuse = &group.diffuse[ i ];
+
+			for ( i32 colIdx = 0, colCount = diffuse->colliderCount; colIdx < colCount; ++colIdx )
+			{
+				const GenCollisionData *col = &diffuse->genColData[ colIdx ];
+
+				switch ( col->type )
+				{
+				case GEN_COLLISION_DATA_TYPE_RECT_AUTO:
+				case GEN_COLLISION_DATA_TYPE_RECT_FULL:
+				case GEN_COLLISION_DATA_TYPE_RECT_MANUAL:
+					{
+						u8 colliderType = COLLIDER_TYPE_RECT;
+						dataFile.write( (char*)&colliderType, sizeof( colliderType ) );
+						dataFile.write( (char*)&col->area, sizeof( col->area ) );
+					}
+					break;
+
+				case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO:
+				case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS:
+				case GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL:
+					{
+						u8 colliderType = COLLIDER_TYPE_CIRCLE;
+						dataFile.write( (char*)&colliderType, sizeof( colliderType ) );
+						dataFile.write( (char*)&col->position, sizeof( col->position ) );
+						dataFile.write( (char*)&col->radius, sizeof( col->radius ) );
+					}
+					break;
+				}
+			}
+		}
 	}
 
 	return ret;
@@ -520,6 +810,11 @@ int main( int argc, char *argv[] )
 				return usage( RETURN_CODE_INVALID_ARGUMENTS );
 			data.padding = atoi( argv[ i + 1 ] );
 
+			i += 1;
+		}
+		else if ( strcmp( argv[ i ], "-collision" ) == 0 )
+		{
+			generateCollisionData.enable = true;
 			i += 1;
 		}
 		else if ( strcmp( argv[ i ], "-verbose" ) == 0 )
