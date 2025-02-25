@@ -241,8 +241,6 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 
 		filepath = entrypath.string();
 		filename = entrypath.stem().string();
-		datafilename = entrypath.replace_extension( "txt" ).string();
-		datafile.open( datafilename, std::ios::binary );
 
 		if ( verbose )
 			std::cout << "Processing file: " << filepath << std::endl;
@@ -255,120 +253,6 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 		collisionCount = generateCollisionData.enable ? 1 : 0;
 		genColData[ 0 ] = generateCollisionData;
 		manualCol = false;
-
-		if ( datafile.is_open() )
-		{
-			if ( verbose )
-				std::cout << "Reading datafile: " << datafilename << std::endl;
-
-			while ( !datafile.eof() && datafile.good() )
-			{
-				datafile >> datafileField;
-
-				if ( datafileField == "FC" )
-				{
-					datafile >> datafileValue;
-					frameCount = datafileValue;
-				}
-				else if ( datafileField == "MG" )
-				{
-					datafile >> datafileValue;
-					margin = datafileValue;
-				}
-				else if ( datafileField == "PD" )
-				{
-					datafile >> datafileValue;
-					padding = datafileValue;
-				}
-				else if ( datafileField == "OR" )
-				{
-					datafile >> datafileValue;
-					originX = datafileValue;
-					datafile >> datafileValue;
-					originY = datafileValue;
-				}
-				else if ( datafileField == "COL" )
-				{
-					// first collision is overwritten if their was a global one
-					if ( !manualCol && generateCollisionData.enable && collisionCount == 1 )
-					{
-						manualCol = true;
-						collisionCount -= 1;
-					}
-					GenCollisionData *colData = &genColData[ collisionCount++ ];
-					colData->enable = true;
-					datafile >> datafileField;
-					if ( datafileField == "RECT" )
-					{
-						datafile >> datafileField;
-						if ( datafileField == "A" ) // Auto
-						{
-							colData->type = GEN_COLLISION_DATA_TYPE_RECT_AUTO;
-						}
-						if ( datafileField == "F" ) // Full
-						{
-							colData->type = GEN_COLLISION_DATA_TYPE_RECT_FULL;
-						}
-						else if ( datafileField == "M" ) // Manual
-						{
-							colData->type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL;
-							datafile >> datafileValue;
-							colData->area.x = datafileValue;
-							datafile >> datafileValue;
-							colData->area.y = datafileValue;
-							datafile >> datafileValue;
-							colData->area.z = datafileValue;
-							datafile >> datafileValue;
-							colData->area.w = datafileValue;
-						}
-						else
-						{
-							if ( verbose )
-								std::cout << "Unknown data file field COL RECT: " << datafileField << std::endl;
-						}
-					}
-					else if ( datafileField == "CIRCLE" )
-					{
-						datafile >> datafileField;
-						if ( datafileField == "A" ) // Auto
-						{
-							colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO;
-						}
-						else if ( datafileField == "AE" ) // Auto-Emcompass
-						{
-							colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS;
-						}
-						else if ( datafileField == "M" ) // Manual
-						{
-							colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL;
-							datafile >> datafileValue;
-							colData->position.x = datafileValue;
-							datafile >> datafileValue;
-							colData->position.y = datafileValue;
-							datafile >> datafileValue;
-							colData->radius = datafileValue;
-						}
-						else
-						{
-							if ( verbose )
-								std::cout << "Unknown data file field COL CIRCLE: " << datafileField << std::endl;
-						}
-					}
-					else
-					{
-						if ( verbose )
-							std::cout << "Unknown data file field for COL: " << datafileField << std::endl;
-					}
-				}
-				else
-				{
-					if ( verbose )
-						std::cout << "Unknown data file field: " << datafileField << std::endl;
-				}
-			}
-		}
-
-		datafile.close();
 
 		Image *image = nullptr;
 
@@ -392,6 +276,138 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 		}
 		else
 		{
+			if ( frameCount == -1 )
+			{
+				frameCount = 1;
+
+				size_t found = filename.rfind( "_" );
+
+				if ( found != std::string::npos )
+				{
+					if ( to_int( &frameCount, &filename[ found + 1 ], nullptr, 10 ) == ToIntResult::Success )
+					{
+						filename.erase( found );
+					}
+				}
+			}
+
+			datafilename = ( entrypath.parent_path() / filename ).replace_extension( "txt" ).string();
+			datafile.open( datafilename, std::ios::binary );
+
+			if ( datafile.is_open() )
+			{
+				if ( verbose )
+					std::cout << "Reading datafile: " << datafilename << std::endl;
+
+				while ( !datafile.eof() && datafile.good() )
+				{
+					datafile >> datafileField;
+
+					if ( datafileField == "FC" )
+					{
+						datafile >> datafileValue;
+						frameCount = datafileValue;
+					}
+					else if ( datafileField == "MG" )
+					{
+						datafile >> datafileValue;
+						margin = datafileValue;
+					}
+					else if ( datafileField == "PD" )
+					{
+						datafile >> datafileValue;
+						padding = datafileValue;
+					}
+					else if ( datafileField == "OR" )
+					{
+						datafile >> datafileValue;
+						originX = datafileValue;
+						datafile >> datafileValue;
+						originY = datafileValue;
+					}
+					else if ( datafileField == "COL" )
+					{
+						// first collision is overwritten if their was a global one
+						if ( !manualCol && generateCollisionData.enable && collisionCount == 1 )
+						{
+							manualCol = true;
+							collisionCount -= 1;
+						}
+						GenCollisionData *colData = &genColData[ collisionCount++ ];
+						colData->enable = true;
+						datafile >> datafileField;
+						if ( datafileField == "RECT" )
+						{
+							datafile >> datafileField;
+							if ( datafileField == "A" ) // Auto
+							{
+								colData->type = GEN_COLLISION_DATA_TYPE_RECT_AUTO;
+							}
+							if ( datafileField == "F" ) // Full
+							{
+								colData->type = GEN_COLLISION_DATA_TYPE_RECT_FULL;
+							}
+							else if ( datafileField == "M" ) // Manual
+							{
+								colData->type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL;
+								datafile >> datafileValue;
+								colData->area.x = datafileValue;
+								datafile >> datafileValue;
+								colData->area.y = datafileValue;
+								datafile >> datafileValue;
+								colData->area.z = datafileValue;
+								datafile >> datafileValue;
+								colData->area.w = datafileValue;
+							}
+							else
+							{
+								if ( verbose )
+									std::cout << "Unknown data file field COL RECT: " << datafileField << std::endl;
+							}
+						}
+						else if ( datafileField == "CIRCLE" )
+						{
+							datafile >> datafileField;
+							if ( datafileField == "A" ) // Auto
+							{
+								colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO;
+							}
+							else if ( datafileField == "AE" ) // Auto-Emcompass
+							{
+								colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS;
+							}
+							else if ( datafileField == "M" ) // Manual
+							{
+								colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL;
+								datafile >> datafileValue;
+								colData->position.x = datafileValue;
+								datafile >> datafileValue;
+								colData->position.y = datafileValue;
+								datafile >> datafileValue;
+								colData->radius = datafileValue;
+							}
+							else
+							{
+								if ( verbose )
+									std::cout << "Unknown data file field COL CIRCLE: " << datafileField << std::endl;
+							}
+						}
+						else
+						{
+							if ( verbose )
+								std::cout << "Unknown data file field for COL: " << datafileField << std::endl;
+						}
+					}
+					else
+					{
+						if ( verbose )
+							std::cout << "Unknown data file field: " << datafileField << std::endl;
+					}
+				}
+			}
+
+			datafile.close();
+
 			data.map[ filename ] = data.group.diffuse.size();
 
 			data.rects.emplace_back();
@@ -406,23 +422,8 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 			data.texpackSprite.emplace_back();
 			TexpackSpriteNamed *spr = &data.texpackSprite.back();
 
-			if ( frameCount == -1 )
-			{
+			if ( frameCount <= 0 )
 				frameCount = 1;
-
-				size_t found = image->filename.rfind( "_" );
-
-				if ( found != std::string::npos )
-				{
-					if ( to_int( &frameCount, &image->filename[ found + 1 ], nullptr, 10 ) == ToIntResult::Success )
-					{
-						image->filename.erase( found );
-					}
-				}
-
-				if ( frameCount == 0 )
-					frameCount = 1;
-			}
 
 			if ( originX == INT32_MAX )
 				originX = ( image->width / frameCount ) / 2;
