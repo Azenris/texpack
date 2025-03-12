@@ -343,7 +343,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 							{
 								colData->type = GEN_COLLISION_DATA_TYPE_RECT_AUTO;
 							}
-							if ( datafileField == "F" ) // Full
+							else if ( datafileField == "F" ) // Full
 							{
 								colData->type = GEN_COLLISION_DATA_TYPE_RECT_FULL;
 							}

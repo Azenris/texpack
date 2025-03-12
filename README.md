@@ -12,6 +12,9 @@ For license see LICENSE.md
 
 For third party see third_party/THIRD_PARTY_LICENSES.txt
 
+### Naming
+Filenames cannot currently include underscores except for including emossive and normals which end in _e and _n respectively.
+
 ### Datafile
 Datafiles should have the same name as the image file but with a txt extension.
 They can override some global options with image specific ones. For example changing the padding.
