@@ -67,6 +67,7 @@ struct TexpackSprite
 	ivec2 origin;
 	i32 frameCount;
 	bool isTranslucent;
+	u16 nineslice;
 	u8 colliderCount;
 };
 

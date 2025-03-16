@@ -225,6 +225,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 	i32 originY;
 	i32 imgWidth;
 	i32 imgHeight;
+	u16 nineslice;
 	bool manualCol;
 	u32 collisionCount;
 	GenCollisionData genColData[ MAX_SPRITE_COLLIDERS ];
@@ -250,6 +251,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 		padding = data.data->padding;
 		originX = INT32_MAX;
 		originY = INT32_MAX;
+		nineslice = 0;
 		collisionCount = generateCollisionData.enable ? 1 : 0;
 		genColData[ 0 ] = generateCollisionData;
 		manualCol = false;
@@ -324,6 +326,16 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 						originX = datafileValue;
 						datafile >> datafileValue;
 						originY = datafileValue;
+					}
+					else if ( datafileField == "NS" )
+					{
+						datafile >> datafileValue;
+						if ( datafileValue < 0 || datafileValue > 65535 )
+						{
+							std::cerr << "Nineslice value out of bounds: " << datafileValue << std::endl;
+							datafileValue = 0;
+						}
+						nineslice = (u16)datafileValue;
 					}
 					else if ( datafileField == "COL" )
 					{
@@ -433,6 +445,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 
 			spr->sprite.frameCount = frameCount;
 			spr->sprite.origin = { originX + padding, originY + padding };
+			spr->sprite.nineslice = nineslice;
 			spr->sprite.colliderCount = (u8)collisionCount;
 
 			imgWidth = image->width;

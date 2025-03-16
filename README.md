@@ -31,6 +31,7 @@ FC <num>        = FrameCount
 MG <num>        = Margin
 PD <num>        = Padding
 OR <num> <num>  = Origin
+NS <num>        = Nineslice Pixel Corner Count
 ```
 ```
 COL <type> <char> ...  = Collision
