@@ -35,9 +35,11 @@ NS <num>        = Nineslice Pixel Corner Count
 ```
 ```
 COL <type> <char> ...  = Collision
-  COL <type> can be either RECT or CIRCLE
-  COL <char> can be A to generate automatic values
+  <type> can be either RECT or CIRCLE
+  <char> can be A to generate automatic values
+  <char> can be F to generate as full image
 EG.
+COL RECT F             = a rect as the full image size
 COL RECT M 1 1 5 5     = a rect with 1, 1, 5, 5 values
 COL RECT A             = auto generate around the sprite
 COL CIRCLE M 1 1 5     = a circle at position 1, 1 with a radius of 5
