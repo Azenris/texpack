@@ -19,7 +19,7 @@ target_compile_definitions( app PRIVATE -DBUILD_TYPE="$<$<CONFIG:Debug>:DEBUG>$<
 target_compile_definitions( app PRIVATE LITTLE_ENDIAN )
 target_compile_definitions( app PRIVATE UNITY_BUILD )
 
-target_compile_features( app PRIVATE cxx_std_20 )
+target_compile_features( app PRIVATE cxx_std_23 )
 
 target_include_directories( app PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/" )
 target_include_directories( app PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/" )

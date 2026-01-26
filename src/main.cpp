@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <climits>
 #include <charconv>
+#include <print>
+#include <string_view>
 
 // Third Party Includes
 #pragma warning( push )
@@ -60,20 +62,54 @@ enum RETURN_CODE
 	RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
 };
 
+template <typename... Args>
+void printerr( std::format_string<Args...> fmt, Args&&... args )
+{
+	// Compiler has a problem with printerr( for some reason, so using this instead
+	std::cerr << std::format( fmt, std::forward<Args>( args )... ) << std::endl;
+}
+
+template <>
+struct std::formatter<RETURN_CODE, char>
+{
+	constexpr auto parse( std::format_parse_context &ctx )
+	{
+		return ctx.begin();
+	}
+
+	auto format( RETURN_CODE code, format_context &ctx ) const
+	{
+		std::string_view name;
+		switch ( code )
+		{
+		case RETURN_CODE_SUCCESS:                                    name = "SUCCESS"; break;
+		case RETURN_CODE_INVALID_ARGUMENTS:                          name = "INVALID_ARGUMENTS"; break;
+		case RETURN_CODE_FAILED_TO_PACK_ALL:                         name = "FAILED_TO_PACK_ALL"; break;
+		case RETURN_CODE_FAILED_TO_OPEN_DIRECTORY:                   name = "FAILED_TO_OPEN_DIRECTORY"; break;
+		case RETURN_CODE_FAILED_TO_OPEN_IMAGE:                       name = "FAILED_TO_OPEN_IMAGE"; break;
+		case RETURN_CODE_FAILED_TO_CREATE_DATA_FILE:                 name = "FAILED_TO_CREATE_DATA_FILE"; break;
+		case RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:    name = "NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
+		case RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:  name = "EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
+		default:                                                     name = "UNKNOWN"; break;
+		}
+		return std::format_to( ctx.out(), "{} ( {} )", name, static_cast<i32>( code ) );
+	}
+};
+
 RETURN_CODE usage( RETURN_CODE code )
 {
-	std::cerr << "\nERROR: " << code << "\n\n";
-
-	std::cerr << "texpack usage:\n"
-				 "texpack <folder> -o <output-folder> -w 4096 -h 4096 -pad 2\n"
-				 "\n"
-				 "-o <output-folder>  output folder \n"
-				 "-w 4096             width of output textures \n"
-				 "-h 4096             height of output textures \n"
-				 "-margin 1           extra space around and not included in the sprite\n"
-				 "-pad 2              extra space around and included in the sprite\n"
-				 "-collision          generate collision box\n"
-				 "-verbose            verbose logging" << std::endl;
+	printerr( "\nERROR: {}\n\n"
+		"texpack usage:\n"
+		"texpack <folder> -o <output-folder> -w 4096 -h 4096 -pad 2\n"
+		"\n"
+		"-o <output-folder>  output folder \n"
+		"-w 4096             width of output textures \n"
+		"-h 4096             height of output textures \n"
+		"-margin 1           extra space around and not included in the sprite\n"
+		"-pad 2              extra space around and included in the sprite\n"
+		"-collision          generate collision box\n"
+		"-verbose            verbose logging"
+		"\n", code );
 
 	return code;
 }
@@ -253,7 +289,7 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 		filename = entrypath.stem().string();
 
 		if ( options->verbose )
-			std::cout << "Processing file: " << filepath << std::endl;
+			std::println( "Processing file: {}", filepath );
 
 		frameCount = -1;
 		margin = data->margin;
@@ -308,7 +344,7 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 			if ( datafile.is_open() )
 			{
 				if ( options->verbose )
-					std::cout << "Reading datafile: " << datafilename << std::endl;
+					std::println( "Reading datafile: {}", datafilename );
 
 				while ( !datafile.eof() && datafile.good() )
 				{
@@ -341,7 +377,7 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 						datafile >> datafileValue;
 						if ( datafileValue < 0 || datafileValue > 65535 )
 						{
-							std::cerr << "Nineslice value out of bounds: " << datafileValue << std::endl;
+							printerr( "Nineslice value out of bounds: {} (max is 65535)", datafileValue );
 							datafileValue = 0;
 						}
 						nineslice = (u16)datafileValue;
@@ -383,7 +419,7 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 							else
 							{
 								if ( options->verbose )
-									std::cerr << "Unknown data file field COL RECT: " << datafileField << std::endl;
+									printerr( "Unknown data file field COL RECT: {}", datafileField );
 							}
 						}
 						else if ( datafileField == "CIRCLE" )
@@ -410,19 +446,19 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 							else
 							{
 								if ( options->verbose )
-									std::cerr << "Unknown data file field COL CIRCLE: " << datafileField << std::endl;
+									printerr( "Unknown data file field COL CIRCLE: {}", datafileField );
 							}
 						}
 						else
 						{
 							if ( options->verbose )
-								std::cerr << "Unknown data file field for COL: " << datafileField << std::endl;
+								printerr( "Unknown data file field for COL: {}", datafileField );
 						}
 					}
 					else
 					{
 						if ( options->verbose )
-							std::cerr << "Unknown data file field: " << datafileField << std::endl;
+							printerr( "Unknown data file field: {}", datafileField );
 					}
 				}
 			}
@@ -514,7 +550,7 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 
 		if ( !image->img )
 		{
-			std::cerr << "Failed to open image: " << filepath << std::endl;
+			printerr( "Failed to open image: {}", filepath );
 			return RETURN_CODE_FAILED_TO_OPEN_IMAGE;
 		}
 	}
@@ -525,7 +561,7 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data )
 {
 	if ( options->verbose )
-		std::cout << "Processing: " << path << std::endl;
+		std::println( "Processing: {}", path );
 
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
 
@@ -562,12 +598,12 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 	if ( stbrp_pack_rects( &context, rects.data(), (i32)rects.size() ) == 0 )
 	{
 		// TODO : in future could possible make another texture for the overflowed ones
-		std::cerr << "Failed to pack all images. (" << path << ")" << std::endl;
+		printerr( "Failed to pack all images. ({})", path );
 		return RETURN_CODE_FAILED_TO_PACK_ALL;
 	}
 
 	if ( options->verbose )
-		std::cout << "Creating blank images." << path << std::endl;
+		std::println( "Creating blank images. {}", path );
 
 	u64 totalBytes = data->textureWidth * data->textureHeight * data->outputChannels;
 
@@ -612,7 +648,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 	std::ofstream dataFile( outputName + ".dat", std::ios::binary );
 	if ( !dataFile.good() )
 	{
-		std::cerr << "Failed to create data file: " << outputName + ".dat" << std::endl;
+		printerr( "Failed to create data file: {}.dat", outputName );
 		return RETURN_CODE_FAILED_TO_CREATE_DATA_FILE;
 	}
 
@@ -663,7 +699,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 			i32 frameOffY = offY;
 
 			if ( options->verbose )
-				std::cout << "Rendering diffuse image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
+				std::println( "Rendering diffuse image for {} (frame: {})", diffuse.filename, frame );
 
 			isTranslucent = render_image( diffuseImage, frameOffX, frameOffY, frameW, frameH, diffuse.img, diffuse.imgSize, frame, inputTextureW, diffuse.channels, data ) || isTranslucent;
 
@@ -671,12 +707,12 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 			{
 				if ( ( normal.width / spr->sprite.frameCount ) != frameW || normal.height != frameH )
 				{
-					std::cerr << "Normal texture should be same size as diffuse texture." << std::endl;
+					printerr( "Normal texture should be same size as diffuse texture." );
 					return RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
 				if ( options->verbose )
-					std::cout << "Rendering normal image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
+					std::println( "Rendering normal image for {} (frame: {})", diffuse.filename, frame );
 
 				isTranslucent = render_image( normalImage, frameOffX, frameOffY, frameW, frameH, normal.img, normal.imgSize, frame, inputTextureW, normal.channels, data ) || isTranslucent;
 			}
@@ -685,12 +721,12 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 			{
 				if ( ( emissive.width / spr->sprite.frameCount ) != frameW || emissive.height != frameH )
 				{
-					std::cerr << "Emissive texture should be same size as diffuse texture." << std::endl;
+					printerr( "Emissive texture should be same size as diffuse texture." );
 					return RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
 				if ( options->verbose )
-					std::cout << "Rendering emissive image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
+					std::println( "Rendering emissive image for {} (frame: {})", diffuse.filename, frame );
 
 				isTranslucent = render_image( emissiveImage, frameOffX, frameOffY, frameW, frameH, emissive.img, emissive.imgSize, frame, inputTextureW, emissive.channels, data ) || isTranslucent;
 			}
@@ -723,7 +759,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 		}
 	}
 
-	std::cout << "Saving texture: " << diffuseName << std::endl;
+	std::println( "Saving texture: {}", diffuseName );
 
 	stbi_write_png( diffuseName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, diffuseImage.data(), data->textureWidth * data->outputChannels );
 	stbi_write_png( normalName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, normalImage.data(), data->textureWidth * data->outputChannels );
@@ -782,7 +818,7 @@ int main( int argc, char *argv[] )
 
 	if ( argc < 2 )
 	{
-		std::cerr << "Invalid arguments" << std::endl;
+		printerr( "Invalid arguments." );
 		return usage( RETURN_CODE_INVALID_ARGUMENTS );
 	}
 
@@ -859,13 +895,13 @@ int main( int argc, char *argv[] )
 
 	if ( data.textureWidth == 0 || data.textureHeight == 0 )
 	{
-		std::cerr << "Width and height should be > 0" << std::endl;
+		printerr( "Width and height should be > 0 ({}x{})", data.textureWidth, data.textureHeight );
 		return usage( RETURN_CODE_INVALID_ARGUMENTS );
 	}
 
 	const char *inputPath = argv[ 1 ];
 
-	std::cout << "Input: " << inputPath << std::endl;
+	std::println( "Input: {}", inputPath );
 
 	fs::create_directories( data.outputName );
 
@@ -891,13 +927,13 @@ int main( int argc, char *argv[] )
 		}
 		else
 		{
-			std::cerr << "File ignored. Top layer expects just folder representing texturegroups but found a file : " << filename << std::endl;
+			printerr( "File ignored. Top layer expects just folder representing texturegroups but found a file: {}", filename );
 		}
 	}
 
 	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - now );
 
-	std::cout << "Time: " << milliseconds.count() << "ms" << std::endl;
+	std::println( "Time: {}ms", milliseconds.count() );
 
 	return ret != RETURN_CODE_SUCCESS ? usage( ret ) : ret;
 }
