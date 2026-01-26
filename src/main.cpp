@@ -26,6 +26,27 @@
 
 namespace fs = std::filesystem;
 
+struct Options
+{
+	bool verbose;
+	GenCollisionData generateCollisionData;
+};
+
+struct Group
+{
+	std::vector<Image> diffuse;
+	std::vector<Image> normal;
+	std::vector<Image> emissive;
+};
+
+struct ImageFilesData
+{
+	std::unordered_map<std::string, u64> &map;
+	Group &group;
+	std::vector<stbrp_rect> &rects;
+	std::vector<TexpackSpriteNamed> &texpackSprite;
+};
+
 enum ToIntResult
 {
 	Success,
@@ -72,16 +93,13 @@ RETURN_CODE usage( RETURN_CODE code )
 #define min_value( l, r )	( ( l ) < ( r ) ? ( l ) : ( r ) )
 #define max_value( l, r )	( ( l ) > ( r ) ? ( l ) : ( r ) )
 
-static ivec4 image_rect_area( Image *image, TexpackSpriteNamed *sprite, i32 imgWidth, Data *data )
+static i32 image_rect_area_left( Image *image, i32 left, i32 imgWidth, i32 frameCount )
 {
-	ivec4 area = { INT32_MIN, INT32_MIN, INT32_MAX, INT32_MAX };
 	i32 frameW = image->frameW;
 	i32 frameH = image->frameH;
-	i32 frameCount = sprite->sprite.frameCount;
 	i32 channels = image->channels;
 	u8 *input = image->img;
 
-	// Left Side
 	for ( i32 x = 0; x < frameW; ++x )
 	{
 		for ( i32 y = 0; y < frameH; ++y )
@@ -89,18 +107,21 @@ static ivec4 image_rect_area( Image *image, TexpackSpriteNamed *sprite, i32 imgW
 			for ( i32 frame = 0; frame < frameCount; ++frame )
 			{
 				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
-
 				if ( input[ from + 3 ] != 0 )
-				{
-					area.x = max_value( area.x, x );
-					goto doneLeft;
-				}
+					return max_value( left, x );
 			}
 		}
 	}
-doneLeft:
+	return left;
+}
 
-	// Top Side
+static i32 image_rect_area_top( Image *image, i32 top, i32 imgWidth, i32 frameCount )
+{
+	i32 frameW = image->frameW;
+	i32 frameH = image->frameH;
+	i32 channels = image->channels;
+	u8 *input = image->img;
+
 	for ( i32 y = 0; y < frameH; ++y )
 	{
 		for ( i32 x = 0; x < frameW; ++x )
@@ -108,18 +129,21 @@ doneLeft:
 			for ( i32 frame = 0; frame < frameCount; ++frame )
 			{
 				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
-
 				if ( input[ from + 3 ] != 0 )
-				{
-					area.y = max_value( area.y, y );
-					goto doneTop;
-				}
+					return max_value( top, y );
 			}
 		}
 	}
-doneTop:
+	return top;
+}
 
-	// Right Side
+static i32 image_rect_area_right( Image *image, i32 right, i32 imgWidth, i32 frameCount )
+{
+	i32 frameW = image->frameW;
+	i32 frameH = image->frameH;
+	i32 channels = image->channels;
+	u8 *input = image->img;
+
 	for ( i32 x = frameW - 1; x >= 0; --x )
 	{
 		for ( i32 y = 0; y < frameH; ++y )
@@ -127,18 +151,21 @@ doneTop:
 			for ( i32 frame = 0; frame < frameCount; ++frame )
 			{
 				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
-
 				if ( input[ from + 3 ] != 0 )
-				{
-					area.z = min_value( area.z, x );
-					goto doneRight;
-				}
+					return min_value( right, x );
 			}
 		}
 	}
-doneRight:
+	return right;
+}
 
-	// Bottom Side
+static i32 image_rect_area_bottom( Image *image, i32 bot, i32 imgWidth, i32 frameCount )
+{
+	i32 frameW = image->frameW;
+	i32 frameH = image->frameH;
+	i32 channels = image->channels;
+	u8 *input = image->img;
+
 	for ( i32 y = frameH - 1; y >= 0; --y )
 	{
 		for ( i32 x = 0; x < frameW; ++x )
@@ -146,16 +173,23 @@ doneRight:
 			for ( i32 frame = 0; frame < frameCount; ++frame )
 			{
 				i32 from = ( x + frame * frameW + y * imgWidth ) * channels;
-
 				if ( input[ from + 3 ] != 0 )
-				{
-					area.w = min_value( area.w, y );
-					goto doneBot;
-				}
+					return min_value( bot, y );
 			}
 		}
 	}
-doneBot:
+	return bot;
+}
+
+static ivec4 image_rect_area( Image *image, TexpackSpriteNamed *sprite, i32 imgWidth, Data *data )
+{
+	ivec4 area = { INT32_MIN, INT32_MIN, INT32_MAX, INT32_MAX };
+	i32 frameCount = sprite->sprite.frameCount;
+
+	area.x = image_rect_area_left( image, area.x, imgWidth , frameCount);
+	area.y = image_rect_area_top( image, area.y, imgWidth, frameCount );
+	area.z = image_rect_area_right( image, area.z, imgWidth, frameCount );
+	area.w = image_rect_area_bottom( image, area.w, imgWidth, frameCount );
 
 	area.x += image->padding;
 	area.y += image->padding;
@@ -188,26 +222,7 @@ static bool render_image( std::vector<u8> &output, i32 offX, i32 offY, i32 frame
 	return isTranslucent;
 }
 
-struct Group
-{
-	std::vector<Image> diffuse;
-	std::vector<Image> normal;
-	std::vector<Image> emissive;
-};
-
-struct ImageFilesData
-{
-	std::unordered_map<std::string, u64> &map;
-	Group &group;
-	std::vector<stbrp_rect> &rects;
-	std::vector<TexpackSpriteNamed> &texpackSprite;
-	Data *data;
-};
-
-static bool verbose = false;
-static GenCollisionData generateCollisionData = { .enable = false, .type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL };
-
-RETURN_CODE image_files( const char *path, ImageFilesData &data )
+RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFilesData *fileData )
 {
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
 
@@ -243,35 +258,35 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 		filepath = entrypath.string();
 		filename = entrypath.stem().string();
 
-		if ( verbose )
+		if ( options->verbose )
 			std::cout << "Processing file: " << filepath << std::endl;
 
 		frameCount = -1;
-		margin = data.data->margin;
-		padding = data.data->padding;
+		margin = data->margin;
+		padding = data->padding;
 		originX = INT32_MAX;
 		originY = INT32_MAX;
 		nineslice = 0;
-		collisionCount = generateCollisionData.enable ? 1 : 0;
-		genColData[ 0 ] = generateCollisionData;
+		collisionCount = options->generateCollisionData.enable ? 1 : 0;
+		genColData[ 0 ] = options->generateCollisionData;
 		manualCol = false;
 
 		Image *image = nullptr;
 
 		if ( filename.length() > 1 && filename.back() == 'n' && filename[ filename.length() - 2 ] == '_' )
 		{
-			data.map[ filename ] = data.group.normal.size();
-			data.group.normal.emplace_back();
-			image = &data.group.normal.back();
+			fileData->map[ filename ] = fileData->group.normal.size();
+			fileData->group.normal.emplace_back();
+			image = &fileData->group.normal.back();
 			image->filename = filename;
 			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
 			image->imgSize = image->width * image->height * image->channels;
 		}
 		else if ( filename.length() > 1 && filename.back() == 'e' && filename[ filename.length() - 2 ] == '_' )
 		{
-			data.map[ filename ] = data.group.emissive.size();
-			data.group.emissive.emplace_back();
-			image = &data.group.emissive.back();
+			fileData->map[ filename ] = fileData->group.emissive.size();
+			fileData->group.emissive.emplace_back();
+			image = &fileData->group.emissive.back();
 			image->filename = filename;
 			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
 			image->imgSize = image->width * image->height * image->channels;
@@ -298,7 +313,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 
 			if ( datafile.is_open() )
 			{
-				if ( verbose )
+				if ( options->verbose )
 					std::cout << "Reading datafile: " << datafilename << std::endl;
 
 				while ( !datafile.eof() && datafile.good() )
@@ -340,7 +355,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 					else if ( datafileField == "COL" )
 					{
 						// first collision is overwritten if their was a global one
-						if ( !manualCol && generateCollisionData.enable && collisionCount == 1 )
+						if ( !manualCol && options->generateCollisionData.enable && collisionCount == 1 )
 						{
 							manualCol = true;
 							collisionCount -= 1;
@@ -373,8 +388,8 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 							}
 							else
 							{
-								if ( verbose )
-									std::cout << "Unknown data file field COL RECT: " << datafileField << std::endl;
+								if ( options->verbose )
+									std::cerr << "Unknown data file field COL RECT: " << datafileField << std::endl;
 							}
 						}
 						else if ( datafileField == "CIRCLE" )
@@ -400,39 +415,39 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 							}
 							else
 							{
-								if ( verbose )
-									std::cout << "Unknown data file field COL CIRCLE: " << datafileField << std::endl;
+								if ( options->verbose )
+									std::cerr << "Unknown data file field COL CIRCLE: " << datafileField << std::endl;
 							}
 						}
 						else
 						{
-							if ( verbose )
-								std::cout << "Unknown data file field for COL: " << datafileField << std::endl;
+							if ( options->verbose )
+								std::cerr << "Unknown data file field for COL: " << datafileField << std::endl;
 						}
 					}
 					else
 					{
-						if ( verbose )
-							std::cout << "Unknown data file field: " << datafileField << std::endl;
+						if ( options->verbose )
+							std::cerr << "Unknown data file field: " << datafileField << std::endl;
 					}
 				}
 			}
 
 			datafile.close();
 
-			data.map[ filename ] = data.group.diffuse.size();
+			fileData->map[ filename ] = fileData->group.diffuse.size();
 
-			data.rects.emplace_back();
-			stbrp_rect *rect = &data.rects.back();
+			fileData->rects.emplace_back();
+			stbrp_rect *rect = &fileData->rects.back();
 
-			data.group.diffuse.emplace_back();
-			image = &data.group.diffuse.back();
+			fileData->group.diffuse.emplace_back();
+			image = &fileData->group.diffuse.back();
 			image->filename = filename;
 			image->img = stbi_load( filepath.c_str(), &image->width, &image->height, &image->channels, 4 );
 			image->imgSize = image->width * image->height * image->channels;
 
-			data.texpackSprite.emplace_back();
-			TexpackSpriteNamed *spr = &data.texpackSprite.back();
+			fileData->texpackSprite.emplace_back();
+			TexpackSpriteNamed *spr = &fileData->texpackSprite.back();
 
 			if ( frameCount <= 0 )
 				frameCount = 1;
@@ -472,7 +487,7 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 					switch ( colData->type )
 					{
 					case GEN_COLLISION_DATA_TYPE_RECT_AUTO:
-						colData->area = image_rect_area( image, spr, imgWidth, data.data );
+						colData->area = image_rect_area( image, spr, imgWidth, data );
 						break;
 
 					case GEN_COLLISION_DATA_TYPE_RECT_FULL:
@@ -483,13 +498,13 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 						break;
 
 					case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO:
-						colData->area = image_rect_area( image, spr, imgWidth, data.data );
+						colData->area = image_rect_area( image, spr, imgWidth, data );
 						colData->position = { ( image->frameW + padding * 2 ) / 2, ( image->frameH + padding * 2 ) / 2 };
 						colData->radius = max_value( ( colData->area.z - colData->area.x ), ( colData->area.w - colData->area.y ) );
 						break;
 
 					case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS:
-						colData->area = image_rect_area( image, spr, imgWidth, data.data );
+						colData->area = image_rect_area( image, spr, imgWidth, data );
 						colData->position = { ( image->frameW + padding * 2 ) / 2, ( image->frameH + padding * 2 ) / 2 };
 						// TODO : radius equal to diagonal from centre
 						break;
@@ -513,9 +528,9 @@ RETURN_CODE image_files( const char *path, ImageFilesData &data )
 	return ret;
 }
 
-RETURN_CODE process_texturegroup( const char *path, Data *data )
+RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data )
 {
-	if ( verbose )
+	if ( options->verbose )
 		std::cout << "Processing: " << path << std::endl;
 
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
@@ -531,7 +546,6 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		.group = group,
 		.rects = rects,
 		.texpackSprite = texpackSprite,
-		.data = data,
 	};
 
 	constexpr i32 reserveAmount = 1024;
@@ -540,7 +554,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 	group.emissive.reserve( reserveAmount );
 	rects.reserve( reserveAmount );
 
-	ret = image_files( path, imgData );
+	ret = image_files( path, options, data, &imgData );
 	if ( ret != RETURN_CODE_SUCCESS )
 		return ret;
 
@@ -558,7 +572,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 		return RETURN_CODE_FAILED_TO_PACK_ALL;
 	}
 
-	if ( verbose )
+	if ( options->verbose )
 		std::cout << "Creating blank images." << path << std::endl;
 
 	u64 totalBytes = data->textureWidth * data->textureHeight * data->outputChannels;
@@ -654,7 +668,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 			i32 frameOffX = offX + frame * ( frameW + padding * 2 );
 			i32 frameOffY = offY;
 
-			if ( verbose )
+			if ( options->verbose )
 				std::cout << "Rendering diffuse image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
 
 			isTranslucent = render_image( diffuseImage, frameOffX, frameOffY, frameW, frameH, diffuse.img, diffuse.imgSize, frame, inputTextureW, diffuse.channels, data ) || isTranslucent;
@@ -667,7 +681,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 					return RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
-				if ( verbose )
+				if ( options->verbose )
 					std::cout << "Rendering normal image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
 
 				isTranslucent = render_image( normalImage, frameOffX, frameOffY, frameW, frameH, normal.img, normal.imgSize, frame, inputTextureW, normal.channels, data ) || isTranslucent;
@@ -681,7 +695,7 @@ RETURN_CODE process_texturegroup( const char *path, Data *data )
 					return RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
-				if ( verbose )
+				if ( options->verbose )
 					std::cout << "Rendering emissive image for " << diffuse.filename << "(frame: " << frame << ")" << std::endl;
 
 				isTranslucent = render_image( emissiveImage, frameOffX, frameOffY, frameW, frameH, emissive.img, emissive.imgSize, frame, inputTextureW, emissive.channels, data ) || isTranslucent;
@@ -778,6 +792,16 @@ int main( int argc, char *argv[] )
 		return usage( RETURN_CODE_INVALID_ARGUMENTS );
 	}
 
+	Options options =
+	{
+		.verbose = false,
+		.generateCollisionData =
+		{
+			.enable = false,
+			.type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL
+		},
+	};
+
 	Data data;
 
 	for ( u64 i = 2; i < argc; ++i )
@@ -829,12 +853,12 @@ int main( int argc, char *argv[] )
 		}
 		else if ( strcmp( argv[ i ], "-collision" ) == 0 )
 		{
-			generateCollisionData.enable = true;
+			options.generateCollisionData.enable = true;
 			i += 1;
 		}
 		else if ( strcmp( argv[ i ], "-verbose" ) == 0 )
 		{
-			verbose = true;
+			options.verbose = true;
 			i += 1;
 		}
 	}
@@ -865,7 +889,7 @@ int main( int argc, char *argv[] )
 		{
 			if ( filename != "." && filename != ".." )
 			{
-				ret = process_texturegroup( entry.path().string().c_str(), &data);
+				ret = process_texturegroup( entry.path().string().c_str(), &options, &data );
 
 				if ( ret != RETURN_CODE_SUCCESS )
 					break;
