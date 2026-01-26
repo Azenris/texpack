@@ -11,6 +11,7 @@
 #include <chrono>
 #include <unordered_map>
 #include <climits>
+#include <charconv>
 
 // Third Party Includes
 #pragma warning( push )
@@ -47,19 +48,6 @@ struct ImageFilesData
 	std::vector<TexpackSpriteNamed> &texpackSprite;
 };
 
-enum ToIntResult
-{
-	Success,
-	Failed,
-	Overflow,
-	Underflow,
-};
-
-ToIntResult to_int( i32 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
-ToIntResult to_int( u32 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
-ToIntResult to_int( i64 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
-ToIntResult to_int( u64 *value, char const *str, char **endOut = nullptr, i32 base = 0 );
-
 enum RETURN_CODE
 {
 	RETURN_CODE_SUCCESS,
@@ -88,6 +76,12 @@ RETURN_CODE usage( RETURN_CODE code )
 				 "-verbose            verbose logging" << std::endl;
 
 	return code;
+}
+
+bool to_int( const std::string &str, i32 *result )
+{
+	auto [ ptr, ec ] = std::from_chars( str.data(), str.data() + str.size(), *result );
+	return ec == std::errc{} && ptr == str.data() + str.size();
 }
 
 #define min_value( l, r )	( ( l ) < ( r ) ? ( l ) : ( r ) )
@@ -301,7 +295,7 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 
 				if ( found != std::string::npos )
 				{
-					if ( to_int( &frameCount, &filename[ found + 1 ], nullptr, 10 ) == ToIntResult::Success )
+					if ( to_int( &filename[ found + 1 ], &frameCount ) )
 					{
 						filename.erase( found );
 					}
@@ -906,68 +900,6 @@ int main( int argc, char *argv[] )
 	std::cout << "Time: " << milliseconds.count() << "ms" << std::endl;
 
 	return ret != RETURN_CODE_SUCCESS ? usage( ret ) : ret;
-}
-
-ToIntResult to_int( i32 *value, char const *str, char **endOut, i32 base )
-{
-	i64 v;
-	ToIntResult result = to_int( &v, str, endOut, base );
-	if ( result != ToIntResult::Success )
-		return result;
-	if ( v > INT32_MAX )
-		return ToIntResult::Overflow;
-	if ( v < INT32_MIN )
-		return ToIntResult::Underflow;
-	*value = static_cast<i32>( v );
-	return ToIntResult::Success;
-}
-
-ToIntResult to_int( u32 *value, char const *str, char **endOut, i32 base )
-{
-	u64 v;
-	ToIntResult result = to_int( &v, str, endOut, base );
-	if ( result != ToIntResult::Success )
-		return result;
-	if ( v > UINT32_MAX )
-		return ToIntResult::Overflow;
-	if ( v < 0 )
-		return ToIntResult::Underflow;
-	*value = static_cast<u32>( v );
-	return ToIntResult::Success;
-}
-
-ToIntResult to_int( i64 *value, char const *str, char **endOut, i32 base )
-{
-	char *end;
-	errno = 0;
-	i64 l = strtol( str, &end, base );
-	if ( endOut )
-		*endOut = end;
-	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT32_MAX )
-		return ToIntResult::Overflow;
-	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT32_MIN )
-		return ToIntResult::Underflow;
-	if ( *str == '\0' )
-		return ToIntResult::Failed;
-	*value = l;
-	return ToIntResult::Success;
-}
-
-ToIntResult to_int( u64 *value, char const *str, char **endOut, i32 base )
-{
-	char *end;
-	errno = 0;
-	u64 l = strtoul( str, &end, base );
-	if ( endOut )
-		*endOut = end;
-	if ( ( errno == ERANGE && l == LONG_MAX ) || l > INT32_MAX )
-		return ToIntResult::Overflow;
-	if ( ( errno == ERANGE && l == LONG_MIN ) || l < INT32_MIN )
-		return ToIntResult::Underflow;
-	if ( *str == '\0' )
-		return ToIntResult::Failed;
-	*value = l;
-	return ToIntResult::Success;
 }
 
 // ----------------------------------------
