@@ -6,9 +6,7 @@
 desktop.ini
 
 [Bb][Uu][Ii][Ll][Dd]/
-
-tools/debug/test_data/
-tools/debug/test_data_output/
+[Bb][Ii][Nn]/
 
 # vs cache data
 tools/debug/.vs/

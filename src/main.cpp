@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <iostream>
 #include <string>
+#include <array>
 #include <vector>
 #include <filesystem>
 #include <cstring>
@@ -26,6 +27,11 @@
 
 // Includes
 #include "types.h"
+#include "license.h"
+
+const i32 VERSION_MAJOR = 0;
+const i32 VERSION_MINOR = 2;
+const i32 VERSION_REVISION = 0;
 
 namespace fs = std::filesystem;
 
@@ -812,6 +818,98 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 	return ret;
 }
 
+struct Command
+{
+	std::array<std::string, 2> command;
+	bool (*func)( char *argv[], i32 argc, int &argIdx, Data *data, Options *options );
+};
+
+std::vector<Command> commands =
+{
+	{
+		{ "-o", "--output" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			if ( argIdx == argc - 1 )
+				return false;
+			data->outputName = argv[ ++argIdx ];
+			return true;
+		}
+	},
+	{
+		{ "-w", "--width" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			if ( argIdx == argc - 1 )
+				return false;
+			data->textureWidth = atoi( argv[ ++argIdx ] );
+			return data->textureWidth > 0;
+		}
+	},
+	{
+		{ "-h", "--height" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			if ( argIdx == argc - 1 )
+				return false;
+			data->textureHeight = atoi( argv[ ++argIdx ] );
+			return data->textureHeight > 0;
+		}
+	},
+	{
+		{ "-m", "--margin" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			if ( argIdx == argc - 1 )
+				return false;
+			data->margin = atoi( argv[ ++argIdx ] );
+			return true;
+		}
+	},
+	{
+		{ "-p", "--pad" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			if ( argIdx == argc - 1 )
+				return false;
+			data->padding = atoi( argv[ ++argIdx ] );
+			return true;
+		}
+	},
+	{
+		{ "-c", "--collision" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			options->generateCollisionData.enable = true;
+			return true;
+		}
+	},
+	{
+		{ "-V", "--version" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			fprintf( stdout, "version %d.%d.%d", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION );
+			return true;
+		}
+	},
+	{
+		{ "-v", "--verbose" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			options->verbose = true;
+			return true;
+		}
+	},
+	{
+		{ "-l", "--license" },
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		{
+			fprintf( stdout, "LICENSE:\n%s\n", LICENSE );
+			return true;
+		}
+	},
+};
+
 int main( int argc, char *argv[] )
 {
 	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
@@ -834,63 +932,16 @@ int main( int argc, char *argv[] )
 
 	Data data;
 
-	for ( u64 i = 2; i < argc; ++i )
+	for ( int argIdx = 1; argIdx < argc; ++argIdx )
 	{
-		if ( strcmp( argv[ i ], "-o" ) == 0 )
+		auto find = std::find_if( commands.begin(), commands.end(), [ cmd = argv[ argIdx ] ]( const Command &command )
 		{
-			if ( i == argc - 1 )
-				return usage( RETURN_CODE_INVALID_ARGUMENTS );
+			return command.command[ 0 ] == cmd || command.command[ 1 ] == cmd;
+		} );
 
-			data.outputName = argv[ i + 1 ];
-
-			i += 1;
-		}
-		else if ( strcmp( argv[ i ], "-w" ) == 0 )
-		{
-			if ( i == argc - 1 )
+		if ( find != commands.end() )
+			if ( !find->func( argv, argc, argIdx, &data, &options ) )
 				return usage( RETURN_CODE_INVALID_ARGUMENTS );
-			data.textureWidth = atoi( argv[ i + 1 ] );
-			if ( data.textureWidth == 0 )
-				return usage( RETURN_CODE_INVALID_ARGUMENTS );
-
-			i += 1;
-		}
-		else if ( strcmp( argv[ i ], "-h" ) == 0 )
-		{
-			if ( i == argc - 1 )
-				return usage( RETURN_CODE_INVALID_ARGUMENTS );
-			data.textureHeight = atoi( argv[ i + 1 ] );
-			if ( data.textureHeight == 0 )
-				return usage( RETURN_CODE_INVALID_ARGUMENTS );
-
-			i += 1;
-		}
-		else if ( strcmp( argv[ i ], "-margin" ) == 0 )
-		{
-			if ( i == argc - 1 )
-				return usage( RETURN_CODE_INVALID_ARGUMENTS );
-			data.margin = atoi( argv[ i + 1 ] );
-
-			i += 1;
-		}
-		else if ( strcmp( argv[ i ], "-pad" ) == 0 )
-		{
-			if ( i == argc - 1 )
-				return usage( RETURN_CODE_INVALID_ARGUMENTS );
-			data.padding = atoi( argv[ i + 1 ] );
-
-			i += 1;
-		}
-		else if ( strcmp( argv[ i ], "-collision" ) == 0 )
-		{
-			options.generateCollisionData.enable = true;
-			i += 1;
-		}
-		else if ( strcmp( argv[ i ], "-verbose" ) == 0 )
-		{
-			options.verbose = true;
-			i += 1;
-		}
 	}
 
 	if ( data.textureWidth == 0 || data.textureHeight == 0 )
