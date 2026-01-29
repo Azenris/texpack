@@ -13,7 +13,9 @@ For license see LICENSE.md
 For third party see third_party/THIRD_PARTY_LICENSES.txt
 
 ### Naming
-Filenames cannot currently include underscores except for including emissive and normals which end in _e and _n respectively.
+Filenames should end with how many frames they have. eg. water_4.png
+If the texture is for a normal, instead of a frame count (which is assumed to be the same as its base) end with _n. eg. water_n.png
+If the texture is for a emissive, instead of a frame count (which is assumed to be the same as its base) end with _e. eg. water_e.png
 
 ### Datafile
 Datafiles should have the same name as the image file but with a txt extension.
