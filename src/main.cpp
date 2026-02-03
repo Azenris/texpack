@@ -1,7 +1,6 @@
 
 // System Includes
 #define __STDC_LIMIT_MACROS
-#include <stdint.h>
 #include <iostream>
 #include <string>
 #include <array>
@@ -108,13 +107,15 @@ RETURN_CODE usage( RETURN_CODE code )
 		"texpack usage:\n"
 		"texpack <folder> -o <output-folder> -w 4096 -h 4096 -pad 2\n"
 		"\n"
-		"-o <output-folder>  output folder \n"
-		"-w 4096             width of output textures \n"
-		"-h 4096             height of output textures \n"
-		"-margin 1           extra space around and not included in the sprite\n"
-		"-pad 2              extra space around and included in the sprite\n"
-		"-collision          generate collision box\n"
-		"-verbose            verbose logging"
+		"-o <output-folder>  output folder (or --output) \n"
+		"-w 4096             width of output textures (or --width) \n"
+		"-h 4096             height of output textures (or --height) \n"
+		"-m 1                extra space around and not included in the sprite (or --margin) \n"
+		"-p 2                extra space around and included in the sprite (or --pad) \n"
+		"-c                  generate collision box (or --collision) \n"
+		"-V                  version (or --version) \n"
+		"-v                  verbose logging (or --verbose) \n"
+		"-l                  license (or --license) \n"
 		"\n", code );
 
 	return code;
@@ -888,7 +889,7 @@ std::vector<Command> commands =
 		{ "-V", "--version" },
 		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
 		{
-			fprintf( stdout, "version %d.%d.%d", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION );
+			std::println( "version {}.{}.{}", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION );
 			return true;
 		}
 	},
@@ -904,7 +905,7 @@ std::vector<Command> commands =
 		{ "-l", "--license" },
 		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
 		{
-			fprintf( stdout, "LICENSE:\n%s\n", LICENSE );
+			std::println( "license: ", LICENSE );
 			return true;
 		}
 	},
@@ -954,7 +955,8 @@ int main( int argc, char *argv[] )
 
 	std::println( "Input: {}", inputPath );
 
-	fs::create_directories( data.outputName );
+	if ( fs::path parentDir = fs::path( data.outputName ).parent_path(); !parentDir.empty() )
+		fs::create_directories( parentDir );
 
 	RETURN_CODE ret = RETURN_CODE_SUCCESS;
 
