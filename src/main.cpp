@@ -55,16 +55,16 @@ struct ImageFilesData
 	std::vector<TexpackSpriteNamed> &texpackSprite;
 };
 
-enum RETURN_CODE
+enum RESULT_CODE
 {
-	RETURN_CODE_SUCCESS,
-	RETURN_CODE_INVALID_ARGUMENTS,
-	RETURN_CODE_FAILED_TO_PACK_ALL,
-	RETURN_CODE_FAILED_TO_OPEN_DIRECTORY,
-	RETURN_CODE_FAILED_TO_OPEN_IMAGE,
-	RETURN_CODE_FAILED_TO_CREATE_DATA_FILE,
-	RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
-	RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
+	RESULT_CODE_SUCCESS,
+	RESULT_CODE_INVALID_ARGUMENTS,
+	RESULT_CODE_FAILED_TO_PACK_ALL,
+	RESULT_CODE_FAILED_TO_OPEN_DIRECTORY,
+	RESULT_CODE_FAILED_TO_OPEN_IMAGE,
+	RESULT_CODE_FAILED_TO_CREATE_DATA_FILE,
+	RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
+	RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
 };
 
 template <typename... Args>
@@ -75,37 +75,37 @@ void printerr( std::format_string<Args...> fmt, Args&&... args )
 }
 
 template <>
-struct std::formatter<RETURN_CODE, char>
+struct std::formatter<RESULT_CODE, char>
 {
 	constexpr auto parse( std::format_parse_context &ctx )
 	{
 		return ctx.begin();
 	}
 
-	auto format( RETURN_CODE code, format_context &ctx ) const
+	auto format( RESULT_CODE code, format_context &ctx ) const
 	{
 		std::string_view name;
 		switch ( code )
 		{
-		case RETURN_CODE_SUCCESS:                                    name = "SUCCESS"; break;
-		case RETURN_CODE_INVALID_ARGUMENTS:                          name = "INVALID_ARGUMENTS"; break;
-		case RETURN_CODE_FAILED_TO_PACK_ALL:                         name = "FAILED_TO_PACK_ALL"; break;
-		case RETURN_CODE_FAILED_TO_OPEN_DIRECTORY:                   name = "FAILED_TO_OPEN_DIRECTORY"; break;
-		case RETURN_CODE_FAILED_TO_OPEN_IMAGE:                       name = "FAILED_TO_OPEN_IMAGE"; break;
-		case RETURN_CODE_FAILED_TO_CREATE_DATA_FILE:                 name = "FAILED_TO_CREATE_DATA_FILE"; break;
-		case RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:    name = "NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
-		case RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:  name = "EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
+		case RESULT_CODE_SUCCESS:                                    name = "SUCCESS"; break;
+		case RESULT_CODE_INVALID_ARGUMENTS:                          name = "INVALID_ARGUMENTS"; break;
+		case RESULT_CODE_FAILED_TO_PACK_ALL:                         name = "FAILED_TO_PACK_ALL"; break;
+		case RESULT_CODE_FAILED_TO_OPEN_DIRECTORY:                   name = "FAILED_TO_OPEN_DIRECTORY"; break;
+		case RESULT_CODE_FAILED_TO_OPEN_IMAGE:                       name = "FAILED_TO_OPEN_IMAGE"; break;
+		case RESULT_CODE_FAILED_TO_CREATE_DATA_FILE:                 name = "FAILED_TO_CREATE_DATA_FILE"; break;
+		case RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:    name = "NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
+		case RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:  name = "EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
 		default:                                                     name = "UNKNOWN"; break;
 		}
 		return std::format_to( ctx.out(), "{} ( {} )", name, static_cast<i32>( code ) );
 	}
 };
 
-RETURN_CODE usage( RETURN_CODE code )
+[[noreturn]] void usage( RESULT_CODE code )
 {
 	printerr( "\nERROR: {}\n\n"
 		"texpack usage:\n"
-		"texpack <folder> -o <output-folder> -w 4096 -h 4096 -pad 2\n"
+		"texpack <input> -o <output-folder> -w 4096 -h 4096 -pad 2\n"
 		"\n"
 		"-o <output-folder>  output folder (or --output) \n"
 		"-w 4096             width of output textures (or --width) \n"
@@ -118,7 +118,7 @@ RETURN_CODE usage( RETURN_CODE code )
 		"-l                  license (or --license) \n"
 		"\n", code );
 
-	return code;
+	exit( code );
 }
 
 bool to_int( const std::string &str, i32 *result )
@@ -259,9 +259,9 @@ static bool render_image( std::vector<u8> &output, i32 offX, i32 offY, i32 frame
 	return isTranslucent;
 }
 
-RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFilesData *fileData )
+RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFilesData *fileData )
 {
-	RETURN_CODE ret = RETURN_CODE_SUCCESS;
+	RESULT_CODE ret = RESULT_CODE_SUCCESS;
 
 	fs::path entrypath;
 	std::string filepath;
@@ -558,19 +558,19 @@ RETURN_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 		if ( !image->img )
 		{
 			printerr( "Failed to open image: {}", filepath );
-			return RETURN_CODE_FAILED_TO_OPEN_IMAGE;
+			return RESULT_CODE_FAILED_TO_OPEN_IMAGE;
 		}
 	}
 
 	return ret;
 }
 
-RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data )
+RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data )
 {
 	if ( options->verbose )
 		std::println( "Processing: {}", path );
 
-	RETURN_CODE ret = RETURN_CODE_SUCCESS;
+	RESULT_CODE ret = RESULT_CODE_SUCCESS;
 
 	std::unordered_map<std::string, u64> map;
 	Group group;
@@ -592,7 +592,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 	rects.reserve( reserveAmount );
 
 	ret = image_files( path, options, data, &imgData );
-	if ( ret != RETURN_CODE_SUCCESS )
+	if ( ret != RESULT_CODE_SUCCESS )
 		return ret;
 
 	stbrp_context context;
@@ -606,7 +606,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 	{
 		// TODO : in future could possible make another texture for the overflowed ones
 		printerr( "Failed to pack all images. ({})", path );
-		return RETURN_CODE_FAILED_TO_PACK_ALL;
+		return RESULT_CODE_FAILED_TO_PACK_ALL;
 	}
 
 	if ( options->verbose )
@@ -656,7 +656,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 	if ( !dataFile.good() )
 	{
 		printerr( "Failed to create data file: {}.dat", outputName );
-		return RETURN_CODE_FAILED_TO_CREATE_DATA_FILE;
+		return RESULT_CODE_FAILED_TO_CREATE_DATA_FILE;
 	}
 
 	std::string diffuseName = outputName + ".png";
@@ -715,7 +715,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 				if ( ( normal.width / spr->sprite.frameCount ) != frameW || normal.height != frameH )
 				{
 					printerr( "Normal texture should be same size as diffuse texture." );
-					return RETURN_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
+					return RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
 				if ( options->verbose )
@@ -729,7 +729,7 @@ RETURN_CODE process_texturegroup( const char *path, Options *options, Data *data
 				if ( ( emissive.width / spr->sprite.frameCount ) != frameW || emissive.height != frameH )
 				{
 					printerr( "Emissive texture should be same size as diffuse texture." );
-					return RETURN_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
+					return RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
 				if ( options->verbose )
@@ -918,7 +918,7 @@ int main( int argc, char *argv[] )
 	if ( argc < 2 )
 	{
 		printerr( "Invalid arguments." );
-		return usage( RETURN_CODE_INVALID_ARGUMENTS );
+		usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
 	Options options =
@@ -942,13 +942,13 @@ int main( int argc, char *argv[] )
 
 		if ( find != commands.end() )
 			if ( !find->func( argv, argc, argIdx, &data, &options ) )
-				return usage( RETURN_CODE_INVALID_ARGUMENTS );
+				usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
 	if ( data.textureWidth == 0 || data.textureHeight == 0 )
 	{
 		printerr( "Width and height should be > 0 ({}x{})", data.textureWidth, data.textureHeight );
-		return usage( RETURN_CODE_INVALID_ARGUMENTS );
+		usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
 	const char *inputPath = argv[ 1 ];
@@ -958,7 +958,7 @@ int main( int argc, char *argv[] )
 	if ( fs::path parentDir = fs::path( data.outputName ).parent_path(); !parentDir.empty() )
 		fs::create_directories( parentDir );
 
-	RETURN_CODE ret = RETURN_CODE_SUCCESS;
+	RESULT_CODE ret = RESULT_CODE_SUCCESS;
 
 	i32 numRects = 0;
 	std::string filename;
@@ -974,7 +974,7 @@ int main( int argc, char *argv[] )
 			{
 				ret = process_texturegroup( entry.path().string().c_str(), &options, &data );
 
-				if ( ret != RETURN_CODE_SUCCESS )
+				if ( ret != RESULT_CODE_SUCCESS )
 					break;
 			}
 		}
@@ -988,7 +988,10 @@ int main( int argc, char *argv[] )
 
 	std::println( "Time: {}ms", milliseconds.count() );
 
-	return ret != RETURN_CODE_SUCCESS ? usage( ret ) : ret;
+	if ( ret != RESULT_CODE_SUCCESS )
+		usage( ret );
+
+	return ret;
 }
 
 // ----------------------------------------
