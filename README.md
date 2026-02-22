@@ -24,7 +24,7 @@ If the texture is for a normal, instead of a frame count (which is assumed to be
 If the texture is for a emissive, instead of a frame count (which is assumed to be the same as its base) end with _e. eg. water_e.png
 
 ## Usage
-texpack <input> -o <output-folder> -w 4096 -h 4096 -pad 2
+```texpack <input> -o <output-folder> -w 4096 -h 4096 -pad 2
 
 -o / --output     <output-folder>    output folder
 -w / --width      4096               width of output textures
@@ -36,7 +36,7 @@ texpack <input> -o <output-folder> -w 4096 -h 4096 -pad 2
 -V / --version                       version
 -v / --verbose                       verbose logging
 -l / --license                       license
-
+```
 ### Datafile
 Datafiles should have the same name as the image file but with a txt extension.
 They can override some global options with image specific ones. For example changing the padding.
@@ -103,12 +103,10 @@ struct TexpackSprite
 #pragma pack(pop)
 ```
 > [!NOTE]
-> vec4 is f32 * 4
+> vec4 is f32 * 4 ( 16 bytes )
+> ivec2 is i32 * 2 ( 8 bytes )
 
-> [!NOTE]
-> ivec2 is i32 * 2
-
-### datafile pseudo
+### Read datafile pseudo
 - starting at start of file
 	- Header:       read struct `TexpackHeader`
 	- Texture Name: read text until null terminator

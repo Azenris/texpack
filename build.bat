@@ -7,6 +7,7 @@ if "%CONFIG%"=="" set "CONFIG=ALL"
 
 if not defined VCPKG_ROOT (
 	echo [WARN] Setup enviroment variable: VCPKG_ROOT
+	exit /b
 )
 
 setlocal EnableDelayedExpansion
@@ -15,7 +16,7 @@ set "PROJ_ROOT=%~dp0"
 pushd "%PROJ_ROOT%"
 
 if not exist "build" mkdir "build"
-pushd "build"
+cd "build"
 
 cmake .. -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
 
@@ -30,5 +31,4 @@ if "%CONFIG%"=="ALL" (
 	cmake --build . --config %CONFIG%
 )
 
-popd
 popd
