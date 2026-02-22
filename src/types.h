@@ -58,6 +58,15 @@ struct ivec4
 	i32 w;
 };
 
+struct TexpackHeader
+{
+	u32 magicNumber;
+	u16 majorVersion;
+	u16 minorVersion;
+	u16 revisionVersion;
+	u16 reserved;
+};
+
 struct TexpackTexture
 {
 	ivec2 size;

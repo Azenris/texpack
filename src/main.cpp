@@ -28,9 +28,9 @@
 #include "types.h"
 #include "license.h"
 
-const i32 VERSION_MAJOR = 0;
-const i32 VERSION_MINOR = 2;
-const i32 VERSION_REVISION = 0;
+const u16 VERSION_MAJOR = 0;
+const u16 VERSION_MINOR = 3;
+const u16 VERSION_REVISION = 0;
 
 namespace fs = std::filesystem;
 
@@ -149,6 +149,7 @@ static i32 image_rect_area_left( Image *image, i32 left, i32 imgWidth, i32 frame
 			}
 		}
 	}
+
 	return left;
 }
 
@@ -171,6 +172,7 @@ static i32 image_rect_area_top( Image *image, i32 top, i32 imgWidth, i32 frameCo
 			}
 		}
 	}
+
 	return top;
 }
 
@@ -193,6 +195,7 @@ static i32 image_rect_area_right( Image *image, i32 right, i32 imgWidth, i32 fra
 			}
 		}
 	}
+
 	return right;
 }
 
@@ -215,6 +218,7 @@ static i32 image_rect_area_bottom( Image *image, i32 bot, i32 imgWidth, i32 fram
 			}
 		}
 	}
+
 	return bot;
 }
 
@@ -282,6 +286,11 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 	u32 collisionCount;
 	GenCollisionData genColData[ MAX_SPRITE_COLLIDERS ];
 
+	filepath.reserve( 1024 );
+	filename.reserve( 1024 );
+	datafilename.reserve( 1024 );
+	datafileField.reserve( 1024 );
+
 	for ( const fs::directory_entry &entry : fs::recursive_directory_iterator( path ) )
 	{
 		if ( entry.is_directory() )
@@ -292,8 +301,11 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 		if ( entrypath.extension() == ".txt" )
 			continue;
 
-		filepath = entrypath.string();
-		filename = entrypath.stem().string();
+		auto fp = entrypath.u8string();
+		auto fn = entrypath.stem().u8string();
+
+		filepath.assign( reinterpret_cast<const char*>( fp.data() ), fp.size() );
+		filename.assign( reinterpret_cast<const char*>( fn.data() ), fn.size() );
 
 		if ( options->verbose )
 			std::println( "Processing file: {}", filepath );
@@ -345,10 +357,12 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 				}
 			}
 
-			datafilename = ( entrypath.parent_path() / filename ).replace_extension( "txt" ).string();
+			auto df = ( entrypath.parent_path() / filename ).replace_extension( "txt" ).u8string();
+			datafilename.assign( reinterpret_cast<const char*>( df.data() ), df.size() );
+
 			datafile.open( datafilename, std::ios::binary );
 
-			if ( datafile.is_open() )
+			if ( datafile )
 			{
 				if ( options->verbose )
 					std::println( "Reading datafile: {}", datafilename );
@@ -647,10 +661,16 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 		memset( img, 0, totalBytes );
 	}
 
-	std::string outputName = data->outputName;
-	std::string textureName = fs::path( path ).filename().string();
+	std::string textureName;
+	auto tn = fs::path( path ).filename().u8string();
+	textureName.assign( reinterpret_cast<const char*>( tn.data() ), tn.size() );
 
-	outputName += "/" + textureName;
+	std::string outputName;
+	outputName.reserve( 4096 );
+
+	outputName += data->outputName;
+	outputName += "/";
+	outputName += textureName;
 
 	std::ofstream dataFile( outputName + ".dat", std::ios::binary );
 	if ( !dataFile.good() )
@@ -772,6 +792,17 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 	stbi_write_png( normalName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, normalImage.data(), data->textureWidth * data->outputChannels );
 	stbi_write_png( emissiveName.c_str(), data->textureWidth, data->textureHeight, data->outputChannels, emissiveImage.data(), data->textureWidth * data->outputChannels );
 
+	TexpackHeader texpackHeader =
+	{
+		.magicNumber = 'PxeT',
+		.majorVersion = VERSION_MAJOR,
+		.minorVersion = VERSION_MINOR,
+		.revisionVersion = VERSION_REVISION,
+		.reserved = 0,
+	};
+
+	dataFile.write( (char*)&texpackHeader, sizeof( texpackHeader ) );
+
 	dataFile.write( textureName.c_str(), textureName.length() );
 	dataFile.write( ".png", 4 + 1 ); // +1 to write the null terminator
 	dataFile.write( (char*)&texpackTexture, sizeof( texpackTexture ) );
@@ -887,10 +918,10 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-V", "--version" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options ) -> bool
 		{
 			std::println( "version {}.{}.{}", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION );
-			return true;
+			exit( 0 );
 		}
 	},
 	{
@@ -903,10 +934,10 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-l", "--license" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options ) -> bool
 		{
 			std::println( "license: ", LICENSE );
-			return true;
+			exit( 0 );
 		}
 	},
 };
@@ -961,18 +992,31 @@ int main( int argc, char *argv[] )
 	RESULT_CODE ret = RESULT_CODE_SUCCESS;
 
 	i32 numRects = 0;
+
+	fs::path entrypath;
+
 	std::string filename;
+	filename.reserve( 1024 );
+
+	std::string filepath;
+	filepath.reserve( 4096 );
 
 	// Cycle the top layer of folders (These are the texturegroups)
 	for ( const auto &entry : fs::directory_iterator( inputPath ) )
 	{
-		filename = entry.path().filename().string();
+		entrypath = entry.path();
+
+		auto fn = entrypath.filename().u8string();
+		filename.assign( reinterpret_cast<const char*>( fn.data() ), fn.size() );
 
 		if ( entry.is_directory() )
 		{
 			if ( filename != "." && filename != ".." )
 			{
-				ret = process_texturegroup( entry.path().string().c_str(), &options, &data );
+				auto fp = entrypath.u8string();
+				filepath.assign( reinterpret_cast<const char*>( fp.data() ), fp.size() );
+
+				ret = process_texturegroup( filepath.c_str(), &options, &data );
 
 				if ( ret != RESULT_CODE_SUCCESS )
 					break;
