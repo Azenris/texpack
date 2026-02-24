@@ -32,7 +32,6 @@ If the texture is for a emissive, instead of a frame count (which is assumed to 
 -m / --margin     1                  extra space around and not included in the sprite
 -p / --pad        2                  extra space around and included in the sprite
 -c / --collision                     generate collision box
--t / --time                          output 'Time: <time>' in standard out after completion
 -V / --version                       version
 -v / --verbose                       verbose logging
 -l / --license                       license
@@ -103,10 +102,11 @@ struct TexpackSprite
 #pragma pack(pop)
 ```
 > [!NOTE]
-> vec4 is f32 * 4 ( 16 bytes )
-> ivec2 is i32 * 2 ( 8 bytes )
+> `vec4` is f32 * 4 ( 16 bytes )
+> [!NOTE]
+> `ivec2` is i32 * 2 ( 8 bytes )
 
-### Read datafile pseudo
+### Read .dat file pseudo
 - starting at start of file
 	- Header:       read struct `TexpackHeader`
 	- Texture Name: read text until null terminator

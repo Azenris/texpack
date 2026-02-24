@@ -67,13 +67,6 @@ enum RESULT_CODE
 	RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
 };
 
-template <typename... Args>
-void printerr( std::format_string<Args...> fmt, Args&&... args )
-{
-	// Compiler has a problem with printerr( for some reason, so using this instead
-	std::cerr << std::format( fmt, std::forward<Args>( args )... ) << std::endl;
-}
-
 template <>
 struct std::formatter<RESULT_CODE, char>
 {
@@ -103,7 +96,7 @@ struct std::formatter<RESULT_CODE, char>
 
 [[noreturn]] void usage( RESULT_CODE code )
 {
-	printerr( "\nERROR: {}\n\n"
+	std::println( stderr, "\nERROR: {}\n\n"
 		"texpack usage:\n"
 		"texpack <input> -o <output-folder> -w 4096 -h 4096 -pad 2\n"
 		"\n"
@@ -398,7 +391,7 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 						datafile >> datafileValue;
 						if ( datafileValue < 0 || datafileValue > 65535 )
 						{
-							printerr( "Nineslice value out of bounds: {} (max is 65535)", datafileValue );
+							std::println( stderr, "Nineslice value out of bounds: {} (max is 65535)", datafileValue );
 							datafileValue = 0;
 						}
 						nineslice = (u16)datafileValue;
@@ -440,7 +433,7 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 							else
 							{
 								if ( options->verbose )
-									printerr( "Unknown data file field COL RECT: {}", datafileField );
+									std::println( stderr, "Unknown data file field COL RECT: {}", datafileField );
 							}
 						}
 						else if ( datafileField == "CIRCLE" )
@@ -467,19 +460,19 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 							else
 							{
 								if ( options->verbose )
-									printerr( "Unknown data file field COL CIRCLE: {}", datafileField );
+									std::println( stderr, "Unknown data file field COL CIRCLE: {}", datafileField );
 							}
 						}
 						else
 						{
 							if ( options->verbose )
-								printerr( "Unknown data file field for COL: {}", datafileField );
+								std::println( stderr, "Unknown data file field for COL: {}", datafileField );
 						}
 					}
 					else
 					{
 						if ( options->verbose )
-							printerr( "Unknown data file field: {}", datafileField );
+							std::println( stderr, "Unknown data file field: {}", datafileField );
 					}
 				}
 			}
@@ -571,7 +564,7 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 
 		if ( !image->img )
 		{
-			printerr( "Failed to open image: {}", filepath );
+			std::println( stderr, "Failed to open image: {}", filepath );
 			return RESULT_CODE_FAILED_TO_OPEN_IMAGE;
 		}
 	}
@@ -619,7 +612,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 	if ( stbrp_pack_rects( &context, rects.data(), (i32)rects.size() ) == 0 )
 	{
 		// TODO : in future could possible make another texture for the overflowed ones
-		printerr( "Failed to pack all images. ({})", path );
+		std::println( stderr, "Failed to pack all images. ({})", path );
 		return RESULT_CODE_FAILED_TO_PACK_ALL;
 	}
 
@@ -675,7 +668,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 	std::ofstream dataFile( outputName + ".dat", std::ios::binary );
 	if ( !dataFile.good() )
 	{
-		printerr( "Failed to create data file: {}.dat", outputName );
+		std::println( stderr, "Failed to create data file: {}.dat", outputName );
 		return RESULT_CODE_FAILED_TO_CREATE_DATA_FILE;
 	}
 
@@ -734,7 +727,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 			{
 				if ( ( normal.width / spr->sprite.frameCount ) != frameW || normal.height != frameH )
 				{
-					printerr( "Normal texture should be same size as diffuse texture." );
+					std::println( stderr, "Normal texture should be same size as diffuse texture." );
 					return RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
@@ -748,7 +741,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 			{
 				if ( ( emissive.width / spr->sprite.frameCount ) != frameW || emissive.height != frameH )
 				{
-					printerr( "Emissive texture should be same size as diffuse texture." );
+					std::println( stderr, "Emissive texture should be same size as diffuse texture." );
 					return RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
@@ -921,7 +914,7 @@ std::vector<Command> commands =
 		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options ) -> bool
 		{
 			std::println( "version {}.{}.{}", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION );
-			exit( 0 );
+			exit( RESULT_CODE_SUCCESS );
 		}
 	},
 	{
@@ -937,7 +930,7 @@ std::vector<Command> commands =
 		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options ) -> bool
 		{
 			std::println( "license: ", LICENSE );
-			exit( 0 );
+			exit( RESULT_CODE_SUCCESS );
 		}
 	},
 };
@@ -948,7 +941,7 @@ int main( int argc, char *argv[] )
 
 	if ( argc < 2 )
 	{
-		printerr( "Invalid arguments." );
+		std::println( stderr, "Invalid arguments." );
 		usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
@@ -978,7 +971,7 @@ int main( int argc, char *argv[] )
 
 	if ( data.textureWidth == 0 || data.textureHeight == 0 )
 	{
-		printerr( "Width and height should be > 0 ({}x{})", data.textureWidth, data.textureHeight );
+		std::println( stderr, "Width and height should be > 0 ({}x{})", data.textureWidth, data.textureHeight );
 		usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
@@ -986,8 +979,19 @@ int main( int argc, char *argv[] )
 
 	std::println( "Input: {}", inputPath );
 
+	// output folder
 	if ( fs::path parentDir = fs::path( data.outputName ).parent_path(); !parentDir.empty() )
-		fs::create_directories( parentDir );
+	{
+		std::error_code ec;
+
+		fs::create_directories( parentDir, ec );
+
+		if ( ec )
+		{
+			std::println( stderr, "[ERROR] Failed to create destination folder: {}\n", ec.message() );
+			usage( RESULT_CODE_INVALID_ARGUMENTS );
+		}
+	}
 
 	RESULT_CODE ret = RESULT_CODE_SUCCESS;
 
@@ -1024,7 +1028,7 @@ int main( int argc, char *argv[] )
 		}
 		else
 		{
-			printerr( "File ignored. Top layer expects just folder representing texturegroups but found a file: {}", filename );
+			std::println( stderr, "File ignored. Top layer expects just folder representing texturegroups but found a file: {}", filename );
 		}
 	}
 
