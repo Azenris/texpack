@@ -6,8 +6,8 @@ A simple texture packer using stb_rect_pack.
 > This is mostly being used for my own project and structures may change in newer versions.
 
 ### Status
-![Build Windows](https://github.com/Azenris/texpack/actions/workflows/build-windows.yml/badge.svg)
-![Build Ubuntu](https://github.com/Azenris/texpack/actions/workflows/build-ubuntu.yml/badge.svg)
+![Build Windows](actions/workflows/build-windows.yml/badge.svg)
+![Build Ubuntu](actions/workflows/build-ubuntu.yml/badge.svg)
 
 ### License
 For license see LICENSE.md
@@ -24,7 +24,8 @@ If the texture is for a normal, instead of a frame count (which is assumed to be
 If the texture is for a emissive, instead of a frame count (which is assumed to be the same as its base) end with _e. eg. water_e.png
 
 ## Usage
-```texpack <input> -o <output-folder> -w 4096 -h 4096 -pad 2
+```
+texpack <input> -o <output-folder> -w 4096 -h 4096 <flags>
 
 -o / --output     <output-folder>    output folder
 -w / --width      4096               width of output textures
@@ -103,6 +104,7 @@ struct TexpackSprite
 ```
 > [!NOTE]
 > `vec4` is f32 * 4 ( 16 bytes )
+
 > [!NOTE]
 > `ivec2` is i32 * 2 ( 8 bytes )
 

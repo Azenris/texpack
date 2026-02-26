@@ -975,6 +975,12 @@ int main( int argc, char *argv[] )
 		usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
+	if ( argc < 2 )
+	{
+		std::println( stderr, "Invalid arguments." );
+		usage( RESULT_CODE_INVALID_ARGUMENTS );
+	}
+
 	const char *inputPath = argv[ 1 ];
 
 	std::println( "Input: {}", inputPath );

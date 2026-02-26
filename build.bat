@@ -1,7 +1,5 @@
 @echo OFF
 
-cls
-
 set "CONFIG=%~1"
 if "%CONFIG%"=="" set "CONFIG=ALL"
 
