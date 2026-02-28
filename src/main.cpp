@@ -34,10 +34,11 @@ const u16 VERSION_REVISION = 0;
 
 namespace fs = std::filesystem;
 
-struct Options
+struct App
 {
 	bool verbose;
 	GenCollisionData generateCollisionData;
+	u32 problems;
 };
 
 struct Group
@@ -65,6 +66,7 @@ enum RESULT_CODE
 	RESULT_CODE_FAILED_TO_CREATE_DATA_FILE,
 	RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
 	RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE,
+	RESULT_CODE_PROBLEMS_ENCOUNTERED,
 };
 
 template <>
@@ -88,6 +90,7 @@ struct std::formatter<RESULT_CODE, char>
 		case RESULT_CODE_FAILED_TO_CREATE_DATA_FILE:                 name = "FAILED_TO_CREATE_DATA_FILE"; break;
 		case RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:    name = "NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
 		case RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE:  name = "EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE"; break;
+		case RESULT_CODE_PROBLEMS_ENCOUNTERED:                       name = "RESULT_CODE_PROBLEMS_ENCOUNTERED"; break;
 		default:                                                     name = "UNKNOWN"; break;
 		}
 		return std::format_to( ctx.out(), "{} ( {} )", name, static_cast<i32>( code ) );
@@ -256,7 +259,7 @@ static bool render_image( std::vector<u8> &output, i32 offX, i32 offY, i32 frame
 	return isTranslucent;
 }
 
-RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFilesData *fileData )
+RESULT_CODE image_files( const char *path, App *app, Data *data, ImageFilesData *fileData )
 {
 	RESULT_CODE ret = RESULT_CODE_SUCCESS;
 
@@ -300,7 +303,7 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 		filepath.assign( reinterpret_cast<const char*>( fp.data() ), fp.size() );
 		filename.assign( reinterpret_cast<const char*>( fn.data() ), fn.size() );
 
-		if ( options->verbose )
+		if ( app->verbose )
 			std::println( "Processing file: {}", filepath );
 
 		frameCount = -1;
@@ -309,8 +312,8 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 		originX = INT32_MAX;
 		originY = INT32_MAX;
 		nineslice = 0;
-		collisionCount = options->generateCollisionData.enable ? 1 : 0;
-		genColData[ 0 ] = options->generateCollisionData;
+		collisionCount = app->generateCollisionData.enable ? 1 : 0;
+		genColData[ 0 ] = app->generateCollisionData;
 		manualCol = false;
 
 		Image *image = nullptr;
@@ -357,7 +360,7 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 
 			if ( datafile )
 			{
-				if ( options->verbose )
+				if ( app->verbose )
 					std::println( "Reading datafile: {}", datafilename );
 
 				while ( !datafile.eof() && datafile.good() )
@@ -399,10 +402,16 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 					else if ( datafileField == "COL" )
 					{
 						// first collision is overwritten if their was a global one
-						if ( !manualCol && options->generateCollisionData.enable && collisionCount == 1 )
+						if ( !manualCol && app->generateCollisionData.enable && collisionCount == 1 )
 						{
 							manualCol = true;
 							collisionCount -= 1;
+						}
+						if ( collisionCount >= MAX_SPRITE_COLLIDERS )
+						{
+							std::println( stderr, "Too many sprite colliders: {} (max is {})", collisionCount, MAX_SPRITE_COLLIDERS );
+							collisionCount = MAX_SPRITE_COLLIDERS - 1;
+							app->problems += 1;
 						}
 						GenCollisionData *colData = &genColData[ collisionCount++ ];
 						colData->enable = true;
@@ -432,8 +441,9 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 							}
 							else
 							{
-								if ( options->verbose )
+								if ( app->verbose )
 									std::println( stderr, "Unknown data file field COL RECT: {}", datafileField );
+								app->problems += 1;
 							}
 						}
 						else if ( datafileField == "CIRCLE" )
@@ -459,20 +469,23 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 							}
 							else
 							{
-								if ( options->verbose )
+								if ( app->verbose )
 									std::println( stderr, "Unknown data file field COL CIRCLE: {}", datafileField );
+								app->problems += 1;
 							}
 						}
 						else
 						{
-							if ( options->verbose )
+							if ( app->verbose )
 								std::println( stderr, "Unknown data file field for COL: {}", datafileField );
+							app->problems += 1;
 						}
 					}
 					else
 					{
-						if ( options->verbose )
+						if ( app->verbose )
 							std::println( stderr, "Unknown data file field: {}", datafileField );
+						app->problems += 1;
 					}
 				}
 			}
@@ -572,9 +585,9 @@ RESULT_CODE image_files( const char *path, Options *options, Data *data, ImageFi
 	return ret;
 }
 
-RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data )
+RESULT_CODE process_texturegroup( const char *path, App *app, Data *data )
 {
-	if ( options->verbose )
+	if ( app->verbose )
 		std::println( "Processing: {}", path );
 
 	RESULT_CODE ret = RESULT_CODE_SUCCESS;
@@ -598,7 +611,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 	group.emissive.reserve( reserveAmount );
 	rects.reserve( reserveAmount );
 
-	ret = image_files( path, options, data, &imgData );
+	ret = image_files( path, app, data, &imgData );
 	if ( ret != RESULT_CODE_SUCCESS )
 		return ret;
 
@@ -616,7 +629,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 		return RESULT_CODE_FAILED_TO_PACK_ALL;
 	}
 
-	if ( options->verbose )
+	if ( app->verbose )
 		std::println( "Creating blank images. {}", path );
 
 	u64 totalBytes = data->textureWidth * data->textureHeight * data->outputChannels;
@@ -718,7 +731,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 			i32 frameOffX = offX + frame * ( frameW + padding * 2 );
 			i32 frameOffY = offY;
 
-			if ( options->verbose )
+			if ( app->verbose )
 				std::println( "Rendering diffuse image for {} (frame: {})", diffuse.filename, frame );
 
 			isTranslucent = render_image( diffuseImage, frameOffX, frameOffY, frameW, frameH, diffuse.img, diffuse.imgSize, frame, inputTextureW, diffuse.channels, data ) || isTranslucent;
@@ -731,7 +744,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 					return RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
-				if ( options->verbose )
+				if ( app->verbose )
 					std::println( "Rendering normal image for {} (frame: {})", diffuse.filename, frame );
 
 				isTranslucent = render_image( normalImage, frameOffX, frameOffY, frameW, frameH, normal.img, normal.imgSize, frame, inputTextureW, normal.channels, data ) || isTranslucent;
@@ -745,7 +758,7 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 					return RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
 				}
 
-				if ( options->verbose )
+				if ( app->verbose )
 					std::println( "Rendering emissive image for {} (frame: {})", diffuse.filename, frame );
 
 				isTranslucent = render_image( emissiveImage, frameOffX, frameOffY, frameW, frameH, emissive.img, emissive.imgSize, frame, inputTextureW, emissive.channels, data ) || isTranslucent;
@@ -846,14 +859,14 @@ RESULT_CODE process_texturegroup( const char *path, Options *options, Data *data
 struct Command
 {
 	std::array<std::string, 2> command;
-	bool (*func)( char *argv[], i32 argc, int &argIdx, Data *data, Options *options );
+	bool (*func)( char *argv[], i32 argc, int &argIdx, Data *data, App *app );
 };
 
 std::vector<Command> commands =
 {
 	{
 		{ "-o", "--output" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app )
 		{
 			if ( argIdx == argc - 1 )
 				return false;
@@ -863,7 +876,7 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-w", "--width" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app )
 		{
 			if ( argIdx == argc - 1 )
 				return false;
@@ -873,7 +886,7 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-h", "--height" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app )
 		{
 			if ( argIdx == argc - 1 )
 				return false;
@@ -883,7 +896,7 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-m", "--margin" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app )
 		{
 			if ( argIdx == argc - 1 )
 				return false;
@@ -893,7 +906,7 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-p", "--pad" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app )
 		{
 			if ( argIdx == argc - 1 )
 				return false;
@@ -903,15 +916,15 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-c", "--collision" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app )
 		{
-			options->generateCollisionData.enable = true;
+			app->generateCollisionData.enable = true;
 			return true;
 		}
 	},
 	{
 		{ "-V", "--version" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options ) -> bool
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app ) -> bool
 		{
 			std::println( "version {}.{}.{}", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION );
 			exit( RESULT_CODE_SUCCESS );
@@ -919,15 +932,15 @@ std::vector<Command> commands =
 	},
 	{
 		{ "-v", "--verbose" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options )
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app )
 		{
-			options->verbose = true;
+			app->verbose = true;
 			return true;
 		}
 	},
 	{
 		{ "-l", "--license" },
-		[]( char *argv[], i32 argc, int &argIdx, Data *data, Options *options ) -> bool
+		[]( char *argv[], i32 argc, int &argIdx, Data *data, App *app ) -> bool
 		{
 			std::println( "license: ", LICENSE );
 			exit( RESULT_CODE_SUCCESS );
@@ -945,7 +958,7 @@ int main( int argc, char *argv[] )
 		usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
-	Options options =
+	App app =
 	{
 		.verbose = false,
 		.generateCollisionData =
@@ -953,6 +966,7 @@ int main( int argc, char *argv[] )
 			.enable = false,
 			.type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL
 		},
+		.problems = 0,
 	};
 
 	Data data;
@@ -965,7 +979,7 @@ int main( int argc, char *argv[] )
 		} );
 
 		if ( find != commands.end() )
-			if ( !find->func( argv, argc, argIdx, &data, &options ) )
+			if ( !find->func( argv, argc, argIdx, &data, &app ) )
 				usage( RESULT_CODE_INVALID_ARGUMENTS );
 	}
 
@@ -1026,7 +1040,7 @@ int main( int argc, char *argv[] )
 				auto fp = entrypath.u8string();
 				filepath.assign( reinterpret_cast<const char*>( fp.data() ), fp.size() );
 
-				ret = process_texturegroup( filepath.c_str(), &options, &data );
+				ret = process_texturegroup( filepath.c_str(), &app, &data );
 
 				if ( ret != RESULT_CODE_SUCCESS )
 					break;
@@ -1041,6 +1055,9 @@ int main( int argc, char *argv[] )
 	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now() - now );
 
 	std::println( "Time: {}ms", milliseconds.count() );
+
+	if ( app.problems > 0 )
+		usage( RESULT_CODE_PROBLEMS_ENCOUNTERED );
 
 	if ( ret != RESULT_CODE_SUCCESS )
 		usage( ret );

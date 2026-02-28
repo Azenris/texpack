@@ -101,6 +101,13 @@ struct TexpackSprite
 };
 
 #pragma pack(pop)
+
+enum COLLIDER_TYPE : u8
+{
+	COLLIDER_TYPE_CIRCLE,
+	COLLIDER_TYPE_RECT,
+	COLLIDER_TYPE_COUNT
+};
 ```
 > [!NOTE]
 > `vec4` is f32 * 4 ( 16 bytes )
@@ -110,9 +117,20 @@ struct TexpackSprite
 
 ### Read .dat file pseudo
 - starting at start of file
-	- Header:       read struct `TexpackHeader`
-	- Texture Name: read text until null terminator
-	- Texture:      read struct `TexpackTexture`
+	- Header:                  read struct `TexpackHeader`
+	- TextureName:             read text until null terminator
+	- Texture:                 read struct `TexpackTexture`
 	- repeat texture.numSprites times
-		- Sprite Name: read text until null terminator
-		- Sprite:      read struct `TexpackSprite`
+		- SpriteName:          read text until null terminator
+		- Sprite:              read struct `TexpackSprite`
+		- repeat sprite.colliderCount times
+			- Type:            read `COLLIDER_TYPE`
+			- If Type == COLLIDER_TYPE_CIRCLE
+				- PositionX:   read `i32`
+				- PositionY:   read `i32`
+				- Radius:      read `i32`
+			- ElseIf Type == COLLIDER_TYPE_RECT
+				- AreaLeft:    read `i32`
+				- AreaTop:     read `i32`
+				- AreaRright:  read `i32`
+				- AreaBottom:  read `i32`

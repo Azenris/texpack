@@ -92,7 +92,7 @@ struct TexpackSpriteNamed
 	TexpackSprite sprite;
 };
 
-enum COLLIDER_TYPE
+enum COLLIDER_TYPE : u32
 {
 	COLLIDER_TYPE_CIRCLE,
 	COLLIDER_TYPE_RECT,
