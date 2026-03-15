@@ -269,7 +269,6 @@ RESULT_CODE image_files( const char *path, App *app, Data *data, ImageFilesData 
 	std::string datafilename;
 	std::ifstream datafile;
 	std::string datafileField;
-	i32 datafileValue;
 	i32 frameCount;
 	i32 margin;
 	i32 padding;
@@ -369,35 +368,31 @@ RESULT_CODE image_files( const char *path, App *app, Data *data, ImageFilesData 
 
 					if ( datafileField == "FC" )
 					{
-						datafile >> datafileValue;
-						frameCount = datafileValue;
+						datafile >> frameCount;
 					}
 					else if ( datafileField == "MG" )
 					{
-						datafile >> datafileValue;
-						margin = datafileValue;
+						datafile >> margin;
 					}
 					else if ( datafileField == "PD" )
 					{
-						datafile >> datafileValue;
-						padding = datafileValue;
+						datafile >> padding;
 					}
 					else if ( datafileField == "OR" )
 					{
-						datafile >> datafileValue;
-						originX = datafileValue;
-						datafile >> datafileValue;
-						originY = datafileValue;
+						datafile >> originX;
+						datafile >> originY;
 					}
 					else if ( datafileField == "NS" )
 					{
-						datafile >> datafileValue;
-						if ( datafileValue < 0 || datafileValue > 65535 )
+						i32 value;
+						datafile >> value;
+						if ( value < 0 || value > 65535 )
 						{
-							std::println( stderr, "Nineslice value out of bounds: {} (max is 65535)", datafileValue );
-							datafileValue = 0;
+							std::println( stderr, "Nineslice value out of bounds: {} (max is 65535)", value );
+							value = 0;
 						}
-						nineslice = (u16)datafileValue;
+						nineslice = (u16)value;
 					}
 					else if ( datafileField == "COL" )
 					{
@@ -430,14 +425,10 @@ RESULT_CODE image_files( const char *path, App *app, Data *data, ImageFilesData 
 							else if ( datafileField == "M" ) // Manual
 							{
 								colData->type = GEN_COLLISION_DATA_TYPE_RECT_MANUAL;
-								datafile >> datafileValue;
-								colData->area.x = datafileValue;
-								datafile >> datafileValue;
-								colData->area.y = datafileValue;
-								datafile >> datafileValue;
-								colData->area.z = datafileValue;
-								datafile >> datafileValue;
-								colData->area.w = datafileValue;
+								datafile >> colData->area.x;
+								datafile >> colData->area.y;
+								datafile >> colData->area.z;
+								datafile >> colData->area.w;
 							}
 							else
 							{
@@ -460,12 +451,9 @@ RESULT_CODE image_files( const char *path, App *app, Data *data, ImageFilesData 
 							else if ( datafileField == "M" ) // Manual
 							{
 								colData->type = GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL;
-								datafile >> datafileValue;
-								colData->position.x = datafileValue;
-								datafile >> datafileValue;
-								colData->position.y = datafileValue;
-								datafile >> datafileValue;
-								colData->radius = datafileValue;
+								datafile >> colData->position.x;
+								datafile >> colData->position.y;
+								datafile >> colData->radius;
 							}
 							else
 							{
@@ -726,6 +714,18 @@ RESULT_CODE process_texturegroup( const char *path, App *app, Data *data )
 		i32 frameH = rect.h - ( margin + padding ) * 2;
 		bool isTranslucent = false;
 
+		if ( normal.img && ( ( normal.width / spr->sprite.frameCount ) != frameW || normal.height != frameH ) )
+		{
+			std::println( stderr, "Normal texture should be same size as diffuse texture." );
+			return RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
+		}
+
+		if ( emissive.img && ( ( emissive.width / spr->sprite.frameCount ) != frameW || emissive.height != frameH ) )
+		{
+			std::println( stderr, "Emissive texture should be same size as diffuse texture." );
+			return RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
+		}
+
 		for ( i32 frame = 0; frame < spr->sprite.frameCount; ++frame )
 		{
 			i32 frameOffX = offX + frame * ( frameW + padding * 2 );
@@ -738,12 +738,6 @@ RESULT_CODE process_texturegroup( const char *path, App *app, Data *data )
 
 			if ( normal.img )
 			{
-				if ( ( normal.width / spr->sprite.frameCount ) != frameW || normal.height != frameH )
-				{
-					std::println( stderr, "Normal texture should be same size as diffuse texture." );
-					return RESULT_CODE_NORMAL_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
-				}
-
 				if ( app->verbose )
 					std::println( "Rendering normal image for {} (frame: {})", diffuse.filename, frame );
 
@@ -752,12 +746,6 @@ RESULT_CODE process_texturegroup( const char *path, App *app, Data *data )
 
 			if ( emissive.img )
 			{
-				if ( ( emissive.width / spr->sprite.frameCount ) != frameW || emissive.height != frameH )
-				{
-					std::println( stderr, "Emissive texture should be same size as diffuse texture." );
-					return RESULT_CODE_EMISSIVE_TEXTURE_NOT_SAME_SIZE_AS_DIFFUSE;
-				}
-
 				if ( app->verbose )
 					std::println( "Rendering emissive image for {} (frame: {})", diffuse.filename, frame );
 
