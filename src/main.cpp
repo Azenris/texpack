@@ -940,12 +940,6 @@ int main( int argc, char *argv[] )
 {
 	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
 
-	if ( argc < 2 )
-	{
-		std::println( stderr, "Invalid arguments." );
-		usage( RESULT_CODE_INVALID_ARGUMENTS );
-	}
-
 	App app =
 	{
 		.verbose = false,
@@ -1044,11 +1038,11 @@ int main( int argc, char *argv[] )
 
 	std::println( "Time: {}ms", milliseconds.count() );
 
-	if ( app.problems > 0 )
-		usage( RESULT_CODE_PROBLEMS_ENCOUNTERED );
-
 	if ( ret != RESULT_CODE_SUCCESS )
 		usage( ret );
+
+	if ( app.problems > 0 )
+		usage( RESULT_CODE_PROBLEMS_ENCOUNTERED );
 
 	return ret;
 }
