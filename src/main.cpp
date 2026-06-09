@@ -549,9 +549,13 @@ RESULT_CODE image_files( const char *path, App *app, Data *data, ImageFilesData 
 						break;
 
 					case GEN_COLLISION_DATA_TYPE_CIRCLE_AUTO_ENCOMPASS:
-						colData->area = image_rect_area( image, spr, imgWidth, data );
-						colData->position = { ( image->frameW + padding * 2 ) / 2, ( image->frameH + padding * 2 ) / 2 };
-						// TODO : radius equal to diagonal from centre
+						{
+							colData->area = image_rect_area( image, spr, imgWidth, data );
+							colData->position = { ( image->frameW + padding * 2 ) / 2, ( image->frameH + padding * 2 ) / 2 };
+							f32 x = (f32)max_value( abs( colData->area.x ), colData->area.z );
+							f32 y = (f32)max_value( abs( colData->area.y ), colData->area.w );
+							colData->radius = (i32)sqrtf( x * x + y * y );
+						}
 						break;
 
 					case GEN_COLLISION_DATA_TYPE_CIRCLE_MANUAL:
